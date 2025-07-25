@@ -3,6 +3,10 @@
 .env.local
 .env.production
 
+# API Keys and Configuration
+config/api_keys.yml
+config/api_keys.yaml
+
 # Python
 __pycache__/
 *.py[cod]
