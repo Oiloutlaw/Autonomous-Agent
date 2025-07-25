@@ -15,3 +15,4 @@ google-auth-oauthlib
 shopify-api
 pytrends
 facebook-business
+elevenlabs==2.8.1
