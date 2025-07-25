@@ -26,6 +26,7 @@ from crewai import Agent, Task, Crew
 # Load environment variables
 load_dotenv()
 import stripe
+
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 # Faker for generating fake identities
@@ -39,33 +40,41 @@ PROJECT_DIR = os.path.dirname(__file__)
 SECRETS_DIR = '/run/secrets'
 DB_PATH = os.path.join(PROJECT_DIR, 'agent_memory.db')
 SECRET_NAMES = [
-    'openai_api_key', 'github_token', 'stripe_secret_key',
-    'sendgrid_api_key', 'google_ads_api_key', 'google_analytics_api_key',
-    'ahrefs_api_key', 'mailchimp_api_key', 'wordpress_api_key',
-    'bitly_api_key', 'reddit_client_id', 'reddit_client_secret',
-    'reddit_user_agent', 'agent_email', 'youtube_api_key'
+    'openai_api_key',
+    'github_token',
+    'stripe_secret_key',
+    'sendgrid_api_key',
+    'google_ads_api_key',
+    'google_analytics_api_key',
+    'ahrefs_api_key',
+    'mailchimp_api_key',
+    'wordpress_api_key',
+    'bitly_api_key',
+    'reddit_client_id',
+    'reddit_client_secret',
+    'reddit_user_agent',
+    'agent_email',
+    'youtube_api_key',
 ]
 
 # Shared data for metrics and control
-shared_data = {
-    "revenue": 0,
-    "funnels": [],
-    "log": [],
-    "paused": False
-}
+shared_data = {"revenue": 0, "funnels": [], "log": [], "paused": False}
 comm_queue = queue.Queue()
 
 # Flask app for metrics
 app = Flask(__name__)
 
+
 @app.route("/metrics")
 def metrics():
     return jsonify(shared_data)
+
 
 @app.route("/toggle", methods=["POST"])
 def toggle():
     shared_data["paused"] = not shared_data["paused"]
     return jsonify({"paused": shared_data["paused"]})
+
 
 # Initialize memory DB
 def init_memory():
@@ -79,6 +88,7 @@ def init_memory():
     conn.commit()
     conn.close()
 
+
 init_memory()
 
 # API keys
@@ -87,8 +97,13 @@ YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
 # Validate API key
 if not openai.api_key or openai.api_key.startswith("your-"):
-    print("❌ ERROR: Invalid or missing OpenAI API key. Please set the OPENAI_API_KEY environment variable to a valid key.")
-    import sys; sys.exit(1)
+    print(
+        "❌ ERROR: Invalid or missing OpenAI API key. Please set the OPENAI_API_KEY environment variable to a valid key."
+    )
+    import sys
+
+    sys.exit(1)
+
 
 # YouTube monetization check function
 def check_youtube_monetization():
@@ -103,6 +118,7 @@ def check_youtube_monetization():
         print("❌ Channel is NOT eligible. Needs 1000 subs & 4000 watch hours.")
     return {"eligible": eligible, "subscribers": subscribers, "watch_hours": watch_hours}
 
+
 # Upload video to YouTube
 def upload_to_youtube(video_file, title, description):
     if not YOUTUBE_API_KEY:
@@ -114,78 +130,109 @@ def upload_to_youtube(video_file, title, description):
             'categoryId': '22',
             'title': title,
             'description': description,
-            'tags': ['money', 'hustle', 'finance']
+            'tags': ['money', 'hustle', 'finance'],
         },
-        'status': {
-            'privacyStatus': 'public'
-        }
+        'status': {'privacyStatus': 'public'},
     }
     media = MediaFileUpload(video_file, resumable=True)
-    request = youtube.videos().insert(
-        part='snippet,status',
-        body=request_body,
-        media_body=media
-    )
+    request = youtube.videos().insert(part='snippet,status', body=request_body, media_body=media)
     response = request.execute()
     print(f"✅ Uploaded to YouTube: {response.get('id')}")
+
 
 # Define CrewAI agents
 trend_scanner = Agent(
     role='TrendScout',
     goal='Identify high-potential YouTube topics from Reddit/TikTok/Google Trends',
-    backstory='A social media analyst trained to scan Reddit, TikTok, and Google Trends to find the most viral video topics.'
+    backstory='A social media analyst trained to scan Reddit, TikTok, and Google Trends to find the most viral video topics.',
 )
 
 script_writer = Agent(
     role='ScriptWriter',
     goal='Write a 60-second viral video script for the chosen topic',
-    backstory='A creative storyteller who crafts punchy, engaging short scripts for social content based on trending topics.'
+    backstory='A creative storyteller who crafts punchy, engaging short scripts for social content based on trending topics.',
 )
 
 thumbnail_designer = Agent(
     role='ThumbnailCreator',
     goal='Generate a high-CTR thumbnail using AI tools and trends',
-    backstory='A digital designer trained in pattern recognition and audience psychology to maximize YouTube click-through rates.'
+    backstory='A digital designer trained in pattern recognition and audience psychology to maximize YouTube click-through rates.',
 )
 
 video_creator = Agent(
     role='VideoProducer',
     goal='Convert scripts into short video files with dynamic visuals and narration',
-    backstory='An AI-powered video producer that transforms scripts and visuals into polished, high-conversion short videos.'
+    backstory='An AI-powered video producer that transforms scripts and visuals into polished, high-conversion short videos.',
 )
 
 uploader = Agent(
     role='YouTubePublisher',
     goal='Upload the final video with proper title, description, and tags',
-    backstory='An automation expert responsible for publishing content with precise metadata on YouTube to maximize visibility.'
+    backstory='An automation expert responsible for publishing content with precise metadata on YouTube to maximize visibility.',
 )
 
 seo_optimizer = Agent(
     role='SEOOptimizer',
     goal='Optimize video metadata, tags, and social posts to boost traffic and visibility',
-    backstory='An SEO strategist trained in YouTube’s ranking algorithm to amplify reach through data-driven optimizations.'
+    backstory='An SEO strategist trained in YouTube’s ranking algorithm to amplify reach through data-driven optimizations.',
 )
 
 monetization_checker = Agent(
     role='MonetizationChecker',
     goal='Evaluate if the YouTube channel meets monetization criteria and report stats',
-    backstory='A policy compliance agent that monitors and reports monetization eligibility across YouTube metrics.'
+    backstory='A policy compliance agent that monitors and reports monetization eligibility across YouTube metrics.',
 )
 
 # Define tasks and crew
 tasks = [
-    Task(agent=trend_scanner, description="Find a viral video idea", expected_output="Trending topic identified"),
-    Task(agent=script_writer, description="Write a short script about the idea", expected_output="60-second video script"),
-    Task(agent=thumbnail_designer, description="Design a thumbnail based on script", expected_output="Thumbnail image file"),
-    Task(agent=video_creator, description="Generate a video from script and thumbnail", expected_output="Short video file"),
-    Task(agent=uploader, description="Upload video and write basic title/description", expected_output="YouTube video published"),
-    Task(agent=seo_optimizer, description="Enhance metadata and traffic routing for YouTube SEO", expected_output="Optimized metadata"),
-    Task(agent=monetization_checker, description="Run monetization check and log eligibility", expected_output="Monetization report")
+    Task(
+        agent=trend_scanner,
+        description="Find a viral video idea",
+        expected_output="Trending topic identified",
+    ),
+    Task(
+        agent=script_writer,
+        description="Write a short script about the idea",
+        expected_output="60-second video script",
+    ),
+    Task(
+        agent=thumbnail_designer,
+        description="Design a thumbnail based on script",
+        expected_output="Thumbnail image file",
+    ),
+    Task(
+        agent=video_creator,
+        description="Generate a video from script and thumbnail",
+        expected_output="Short video file",
+    ),
+    Task(
+        agent=uploader,
+        description="Upload video and write basic title/description",
+        expected_output="YouTube video published",
+    ),
+    Task(
+        agent=seo_optimizer,
+        description="Enhance metadata and traffic routing for YouTube SEO",
+        expected_output="Optimized metadata",
+    ),
+    Task(
+        agent=monetization_checker,
+        description="Run monetization check and log eligibility",
+        expected_output="Monetization report",
+    ),
 ]
 
 crew = Crew(
-    agents=[trend_scanner, script_writer, thumbnail_designer, video_creator, uploader, seo_optimizer, monetization_checker],
-    tasks=tasks
+    agents=[
+        trend_scanner,
+        script_writer,
+        thumbnail_designer,
+        video_creator,
+        uploader,
+        seo_optimizer,
+        monetization_checker,
+    ],
+    tasks=tasks,
 )
 
 # Main entrypoint
@@ -207,7 +254,7 @@ if __name__ == "__main__":
         "video_creator.py",
         "uploader.py",
         "seo_optimizer.py",
-        "monetization_checker.py"
+        "monetization_checker.py",
     ]:
         path = os.path.join(AGENT_DIR, fname)
         if not os.path.exists(path):
@@ -221,4 +268,6 @@ except Exception as e:
     # Catch authentication errors and other issues
     err_msg = str(e)
     print(f"❌ ERROR during CrewAI execution: {err_msg}")
-    import sys; sys.exit(1)
+    import sys
+
+    sys.exit(1)
