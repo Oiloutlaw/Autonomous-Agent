@@ -22,7 +22,7 @@ class VideoCreatorAgent:
         self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.eleven_key = os.getenv("ELEVENLABS_API_KEY")
         self.elevenlabs_client = ElevenLabs(api_key=self.eleven_key)
-        self.stability_key = os.getenv("STABILITY_API_KEY")
+        self.stability_key = os.getenv("MODELSLAB_API_KEY")
         self.output_dir = "output"
         os.makedirs(self.output_dir, exist_ok=True)
         
@@ -88,17 +88,20 @@ SCRIPT:
         return scenes
 
     def generate_image(self, prompt_text, idx):
-        """Generate image using Stable Diffusion API"""
-        stable_url = "https://stablediffusionapi.com/api/v4/dreambooth"
+        """Generate image using ModelsLab API"""
+        stable_url = "https://modelslab.com/api/v6/realtime/text2img"
         payload = {
             "key": self.stability_key,
             "prompt": prompt_text,
+            "negative_prompt": "bad quality",
             "width": "512",
             "height": "512",
-            "samples": "1",
-            "num_inference_steps": "20",
-            "safety_checker": "no",
-            "enhance_prompt": "yes"
+            "samples": 1,
+            "safety_checker": False,
+            "seed": None,
+            "base64": False,
+            "webhook": None,
+            "track_id": None
         }
         
         response = requests.post(stable_url, json=payload)
