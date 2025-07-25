@@ -8,3 +8,9 @@ stem
 playwright
 flask
 google-api-python-client
+crewai
+stripe
+redis
+docker
+psutil
+schedule
