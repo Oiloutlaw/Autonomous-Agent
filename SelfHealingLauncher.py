@@ -9,11 +9,22 @@ from dotenv import load_dotenv
 import stripe
 import openai
 from crewai import Agent, Task, Crew
+import shopify
+from pytrends.request import TrendReq
+from facebook_business.api import FacebookAdsApi
+from facebook_business.adobjects.campaign import Campaign
 
 load_dotenv()
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+SHOPIFY_API_KEY = os.getenv("SHOPIFY_API_KEY")
+SHOPIFY_PASSWORD = os.getenv("SHOPIFY_PASSWORD") 
+SHOPIFY_STORE = os.getenv("SHOPIFY_STORE")
+FACEBOOK_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN")
+FACEBOOK_APP_ID = os.getenv("FACEBOOK_APP_ID")
+FACEBOOK_APP_SECRET = os.getenv("FACEBOOK_APP_SECRET")
+GOOGLE_ADS_API_KEY = os.getenv("GOOGLE_ADS_API_KEY")
 
 app = Flask(__name__)
 shared_data = {
@@ -71,7 +82,8 @@ def create_stub_agents():
     os.makedirs("agents", exist_ok=True)
     for name in [
         "trend_scanner.py", "script_writer.py", "thumbnail_designer.py",
-        "video_creator.py", "uploader.py", "seo_optimizer.py", "monetization_checker.py"
+        "video_creator.py", "uploader.py", "seo_optimizer.py", "monetization_checker.py",
+        "shopify_store_agent.py", "trending_product_agent.py", "vendor_finder_agent.py", "store_advertiser_agent.py"
     ]:
         path = os.path.join("agents", name)
         if not os.path.exists(path):
@@ -114,6 +126,27 @@ def run_pipeline():
         goal='Check YouTube eligibility',
         backstory='Monitors monetization'
     )
+    
+    shopify_store_agent = Agent(
+        role='ShopifyStoreManager',
+        goal='Create and manage Shopify stores with automated product listings and inventory management',
+        backstory='An e-commerce specialist trained in Shopify Admin API operations, store configuration, and product catalog management'
+    )
+    trending_product_agent = Agent(
+        role='TrendingProductScout', 
+        goal='Identify high-demand trending products using Google Trends and social media analysis',
+        backstory='A market research analyst specialized in trend identification, product demand forecasting, and viral product discovery'
+    )
+    vendor_finder_agent = Agent(
+        role='VendorSourcer',
+        goal='Find and evaluate reliable suppliers for trending products through automated sourcing',
+        backstory='A procurement specialist trained in supplier discovery, vendor evaluation, and wholesale sourcing automation'
+    )
+    store_advertiser_agent = Agent(
+        role='StoreAdvertiser',
+        goal='Create and manage advertising campaigns across Google Ads and Facebook to drive store traffic',
+        backstory='A digital marketing expert specialized in e-commerce advertising, campaign optimization, and ROI maximization'
+    )
 
     tasks = [
         Task(agent=trend_scanner, description="Find a viral idea", expected_output="Trending topic identified"),
@@ -122,11 +155,16 @@ def run_pipeline():
         Task(agent=video_creator, description="Create a video", expected_output="Short video file"),
         Task(agent=uploader, description="Upload to YouTube", expected_output="YouTube video published"),
         Task(agent=seo_optimizer, description="Optimize for SEO", expected_output="Optimized metadata"),
-        Task(agent=monetization_checker, description="Log monetization status", expected_output="Monetization report")
+        Task(agent=monetization_checker, description="Log monetization status", expected_output="Monetization report"),
+        Task(agent=shopify_store_agent, description="Create or update Shopify store with trending products", expected_output="Shopify store configured with products"),
+        Task(agent=trending_product_agent, description="Identify trending products using Google Trends and social analysis", expected_output="List of trending product opportunities"),
+        Task(agent=vendor_finder_agent, description="Source reliable suppliers for identified trending products", expected_output="Vendor contact list with pricing"),
+        Task(agent=store_advertiser_agent, description="Launch advertising campaigns for the store across multiple platforms", expected_output="Active ad campaigns with performance metrics")
     ]
 
     crew = Crew(agents=[trend_scanner, script_writer, thumbnail_designer,
-                        video_creator, uploader, seo_optimizer, monetization_checker],
+                        video_creator, uploader, seo_optimizer, monetization_checker,
+                        shopify_store_agent, trending_product_agent, vendor_finder_agent, store_advertiser_agent],
                 tasks=tasks)
 
     try:
