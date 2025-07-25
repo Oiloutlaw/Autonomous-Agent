@@ -1,0 +1,85 @@
+# API Keys Configuration Template
+# Copy this file to api_keys.yml and fill in your actual API keys
+# DO NOT commit api_keys.yml with real keys - it's in .gitignore
+
+# Core AI Services
+openai:
+  api_key: "sk-your-openai-api-key-here"
+  # Get from: https://platform.openai.com/api-keys
+  # Required: Yes (system will exit without this)
+  # Cost: Pay-per-use, ~$0.002 per 1K tokens
+
+# Video Platform  
+youtube:
+  api_key: "AIza-your-youtube-api-key-here"
+  # Get from: https://console.cloud.google.com/apis/library/youtube.googleapis.com
+  # Required: Yes (for video uploads)
+  # Cost: Free (10,000 units/day quota)
+
+# Payment Processing
+stripe:
+  secret_key: "sk_live_your-stripe-secret-key"
+  # Get from: https://dashboard.stripe.com/apikeys
+  # Required: Yes (for payment processing)
+  # Cost: 2.9% + 30¢ per transaction
+
+# Development & Version Control
+github:
+  token: "ghp_your-github-token-here"
+  # Get from: https://github.com/settings/tokens
+  # Required scopes: repo, workflow
+  # Required: Yes (for repository operations)
+
+# Social Media Monitoring
+reddit:
+  client_id: "your-reddit-client-id"
+  client_secret: "your-reddit-client-secret"
+  user_agent: "autonomous-agent/1.0"
+  # Get from: https://www.reddit.com/prefs/apps
+  # Required: No (for trend monitoring)
+
+# Email Marketing (choose one or both)
+sendgrid:
+  api_key: "SG.your-sendgrid-api-key"
+  # Get from: https://app.sendgrid.com/settings/api_keys
+  # Required: No (for email campaigns)
+
+mailchimp:
+  api_key: "your-mailchimp-api-key-us1"
+  # Get from: https://admin.mailchimp.com/account/api/
+  # Required: No (alternative email service)
+
+# Analytics & Advertising
+google_ads:
+  api_key: "your-google-ads-api-key"
+  # Get from: https://ads.google.com/aw/apicenter
+  # Required: No (for advertising campaigns)
+
+google_analytics:
+  api_key: "your-google-analytics-api-key"
+  # Get from: https://console.cloud.google.com/apis/library/analytics.googleapis.com
+  # Required: No (for traffic analytics)
+
+# SEO & Content Tools
+ahrefs:
+  api_key: "your-ahrefs-api-key"
+  # Get from: https://ahrefs.com/api
+  # Required: No (for SEO analysis)
+  # Cost: Paid subscription required
+
+wordpress:
+  api_key: "your-wordpress-api-key"
+  # Get from: Your WordPress site's REST API settings
+  # Required: No (for content publishing)
+
+bitly:
+  api_key: "your-bitly-api-key"
+  # Get from: https://app.bitly.com/settings/api/
+  # Required: No (for link shortening)
+
+# System Configuration
+system:
+  agent_email: "your-email@domain.com"
+  tor_password: "your-tor-control-password"
+  # Tor password for proxy rotation (optional but recommended)
+  # Configure in /etc/tor/torrc with HashedControlPassword
