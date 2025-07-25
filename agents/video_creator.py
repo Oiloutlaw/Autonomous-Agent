@@ -6,7 +6,7 @@ import subprocess
 from PIL import Image
 from io import BytesIO
 from dotenv import load_dotenv
-import elevenlabs
+from elevenlabs.client import ElevenLabs
 
 load_dotenv()
 
@@ -21,6 +21,7 @@ class VideoCreatorAgent:
     def __init__(self):
         self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.eleven_key = os.getenv("ELEVENLABS_API_KEY")
+        self.elevenlabs_client = ElevenLabs(api_key=self.eleven_key)
         self.stability_key = os.getenv("STABILITY_API_KEY")
         self.output_dir = "output"
         os.makedirs(self.output_dir, exist_ok=True)
@@ -116,11 +117,10 @@ SCRIPT:
 
     def generate_voiceover(self, text, filename):
         """Generate voiceover using ElevenLabs"""
-        elevenlabs.set_api_key(self.eleven_key)
-        audio = elevenlabs.generate(
+        audio = self.elevenlabs_client.text_to_speech.convert(
             text=text,
-            voice="Rachel",
-            model="eleven_monolingual_v1"
+            voice_id="JBFqnCBsd6RMkjVDRZzb",
+            model_id="eleven_multilingual_v2"
         )
         out_path = os.path.join(self.output_dir, filename)
         with open(out_path, "wb") as f:
