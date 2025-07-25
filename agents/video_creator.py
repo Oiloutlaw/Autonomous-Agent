@@ -120,14 +120,17 @@ SCRIPT:
 
     def generate_voiceover(self, text, filename):
         """Generate voiceover using ElevenLabs"""
-        audio = self.elevenlabs_client.text_to_speech.convert(
+        audio_generator = self.elevenlabs_client.text_to_speech.convert(
             text=text,
             voice_id="JBFqnCBsd6RMkjVDRZzb",
             model_id="eleven_multilingual_v2"
         )
+        
         out_path = os.path.join(self.output_dir, filename)
         with open(out_path, "wb") as f:
-            f.write(audio)
+            for chunk in audio_generator:
+                if isinstance(chunk, bytes):
+                    f.write(chunk)
         return out_path
 
     def create_video(self, scenes):
