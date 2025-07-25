@@ -1,0 +1,1 @@
+print("🚀 Agent active: thumbnail_designer.py")

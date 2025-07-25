@@ -1,0 +1,1 @@
+print("🚀 Agent active: trend_scanner.py")
