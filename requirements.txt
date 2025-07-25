@@ -1,0 +1,10 @@
+openai
+praw
+feedparser
+requests
+python-dotenv
+faker
+stem
+playwright
+flask
+google-api-python-client

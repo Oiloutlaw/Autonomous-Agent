@@ -1,0 +1,10 @@
+services:
+  agent:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - TOR_PASSWORD=${TOR_PASSWORD}
+      - AGENT_EMAIL=${AGENT_EMAIL}
