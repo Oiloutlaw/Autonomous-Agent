@@ -1,0 +1,1 @@
+print("🚀 Agent active: trending_product_agent.py")
