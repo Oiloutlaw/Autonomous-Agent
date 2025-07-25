@@ -88,17 +88,20 @@ SCRIPT:
         return scenes
 
     def generate_image(self, prompt_text, idx):
-        """Generate image using Stable Diffusion API"""
-        stable_url = "https://stablediffusionapi.com/api/v4/dreambooth"
+        """Generate image using ModelsLab API"""
+        stable_url = "https://modelslab.com/api/v6/realtime/text2img"
         payload = {
             "key": self.stability_key,
             "prompt": prompt_text,
+            "negative_prompt": "bad quality",
             "width": "512",
             "height": "512",
-            "samples": "1",
-            "num_inference_steps": "20",
-            "safety_checker": "no",
-            "enhance_prompt": "yes"
+            "samples": 1,
+            "safety_checker": False,
+            "seed": None,
+            "base64": False,
+            "webhook": None,
+            "track_id": None
         }
         
         response = requests.post(stable_url, json=payload)
