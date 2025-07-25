@@ -22,7 +22,7 @@ class VideoCreatorAgent:
         self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.eleven_key = os.getenv("ELEVENLABS_API_KEY")
         self.elevenlabs_client = ElevenLabs(api_key=self.eleven_key)
-        self.stability_key = os.getenv("STABILITY_API_KEY")
+        self.stability_key = os.getenv("MODELSLAB_API_KEY")
         self.output_dir = "output"
         os.makedirs(self.output_dir, exist_ok=True)
         
