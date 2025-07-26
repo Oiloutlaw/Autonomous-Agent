@@ -80,7 +80,7 @@ shared_data = {
     "log": [],
     "paused": False,
     "monetization": {},
-    "content_pipeline_active": False,
+    "content_pipeline_active": True,
     "infrastructure_agents_active": 0
 }
 
@@ -466,10 +466,13 @@ def run_content_agent(name):
 def content_loop(interval_minutes=60):
     """Continuous content generation loop"""
     while True:
-        if not shared_data["paused"]:
+        if not shared_data["paused"] and shared_data["content_pipeline_active"]:
             run_content_agent(f"content-agent-{time.time()}")
         else:
-            print("⏸️ Content pipeline paused. Waiting...")
+            if shared_data["paused"]:
+                print("⏸️ Content pipeline paused. Waiting...")
+            elif not shared_data["content_pipeline_active"]:
+                print("⏸️ Content pipeline disabled. Waiting...")
         
         time.sleep(interval_minutes * 60)
 
