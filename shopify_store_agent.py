@@ -1,0 +1,1 @@
+print("🚀 Agent active: shopify_store_agent.py")

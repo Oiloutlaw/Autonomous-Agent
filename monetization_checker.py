@@ -1,0 +1,1 @@
+print("🚀 Agent active: monetization_checker.py")
