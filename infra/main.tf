@@ -12,23 +12,6 @@ provider "aws" {
   region = var.aws_region
 }
 
-variable "aws_region" {
-  description = "AWS region for resources"
-  type        = string
-  default     = "us-east-1"
-}
-
-variable "environment" {
-  description = "Environment name"
-  type        = string
-  default     = "production"
-}
-
-variable "project_name" {
-  description = "Project name for resource naming"
-  type        = string
-  default     = "autonomous-agent"
-}
 
 resource "aws_s3_bucket" "content_storage" {
   bucket = "${var.project_name}-content-${var.environment}-${random_id.bucket_suffix.hex}"
