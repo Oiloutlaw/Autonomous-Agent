@@ -81,7 +81,8 @@ shared_data = {
     "paused": False,
     "monetization": {},
     "content_pipeline_active": False,
-    "infrastructure_agents_active": 0
+    "infrastructure_agents_active": 0,
+    "last_video_result": None
 }
 
 comm_queue = queue.Queue()
@@ -110,8 +111,43 @@ def status():
         "content_pipeline_active": shared_data["content_pipeline_active"],
         "infrastructure_agents_active": shared_data["infrastructure_agents_active"],
         "total_revenue": shared_data["revenue"],
-        "monetization_eligible": shared_data["monetization"].get("eligible", False)
+        "monetization_eligible": shared_data["monetization"].get("eligible", False),
+        "last_video_result": shared_data["last_video_result"]
     })
+
+@app.route("/trigger-video", methods=["POST"])
+def trigger_video():
+    """Manually trigger video creation process"""
+    try:
+        log_action("api", "Manual video creation triggered via /trigger-video endpoint")
+        
+        def run_video_creation():
+            try:
+                log_action("video_trigger", "Starting manual video creation")
+                success = run_content_pipeline()
+                reward = 500 if success else 0
+                log_action("video_trigger", f"Manual video creation completed: {success}", reward)
+                shared_data["last_video_result"] = "success" if success else "failed"
+            except Exception as e:
+                log_action("video_trigger", f"Manual video creation failed: {str(e)}", -1)
+                shared_data["last_video_result"] = f"Error: {str(e)}"
+        
+        video_thread = threading.Thread(target=run_video_creation)
+        video_thread.daemon = True
+        video_thread.start()
+        
+        return jsonify({
+            "status": "success",
+            "message": "Video creation process started",
+            "note": "Check /status endpoint for progress updates"
+        })
+        
+    except Exception as e:
+        log_action("api", f"Failed to trigger video creation: {str(e)}", -1)
+        return jsonify({
+            "status": "error", 
+            "message": f"Failed to start video creation: {str(e)}"
+        }), 500
 
 def init_memory():
     conn = sqlite3.connect(DB_PATH)
@@ -518,6 +554,7 @@ def main():
     print("📈 System status at: http://localhost:8000/status")
     print("⏸️ Toggle pause: POST to http://localhost:8000/toggle")
     print("🎬 Toggle content pipeline: POST to http://localhost:8000/toggle_content")
+    print("🎥 Trigger video creation: POST to http://localhost:8000/trigger-video")
     
     try:
         content_process.join()
