@@ -159,10 +159,14 @@ def run_pipeline():
         backstory="Creates visual hooks",
     )
     video_creator = Agent(
-        role="VideoProducer", goal="Make video", backstory="Edits and narrates content"
+        role="VideoProducer", 
+        goal="Create engaging short-form videos from scripts", 
+        backstory="Expert video producer specializing in AI-generated content creation using advanced tools for image generation, voiceover, and video assembly"
     )
     uploader = Agent(
-        role="YouTubePublisher", goal="Upload to YouTube", backstory="Publishes content"
+        role="YouTubePublisher", 
+        goal="Upload and optimize videos for YouTube", 
+        backstory="YouTube publishing specialist focused on maximizing reach and engagement through proper metadata and SEO optimization"
     )
     seo_optimizer = Agent(
         role="SEOOptimizer", goal="Optimize metadata", backstory="Boosts visibility"
@@ -229,31 +233,42 @@ def run_pipeline():
     else:
         log_action("system", "Shopify agents disabled - module not available")
 
+    import sys
+    sys.path.append("agents")
+    
+    try:
+        from video_creator import execute_video_creation
+        from uploader import execute_upload_task
+        video_creation_available = True
+    except ImportError as e:
+        print(f"⚠️ Video creation modules not available: {e}")
+        video_creation_available = False
+
     core_tasks = [
         Task(
             agent=trend_scanner,
-            description="Find a viral idea",
+            description="Find a viral idea about AI automation and content creation",
             expected_output="Trending topic identified",
         ),
         Task(
             agent=script_writer,
-            description="Write a 60s script",
+            description="Write a 60s script about the trending topic",
             expected_output="60-second video script",
         ),
         Task(
             agent=thumbnail_designer,
-            description="Design a thumbnail",
-            expected_output="Thumbnail image file",
+            description="Design a thumbnail concept",
+            expected_output="Thumbnail design concept",
         ),
         Task(
             agent=video_creator,
-            description="Create a video",
-            expected_output="Short video file",
+            description="Create a video from the script" if video_creation_available else "Plan video creation",
+            expected_output="Short video file" if video_creation_available else "Video creation plan",
         ),
         Task(
             agent=uploader,
-            description="Upload to YouTube",
-            expected_output="YouTube video published",
+            description="Upload to YouTube" if video_creation_available else "Prepare for upload",
+            expected_output="YouTube video published" if video_creation_available else "Upload preparation complete",
         ),
         Task(
             agent=seo_optimizer,
