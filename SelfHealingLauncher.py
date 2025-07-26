@@ -18,9 +18,28 @@ except ImportError:
     print("⚠️ Shopify module not available. E-commerce features will be disabled.")
     shopify = None
     SHOPIFY_AVAILABLE = False
-from pytrends.request import TrendReq
-from facebook_business.api import FacebookAdsApi
-from facebook_business.adobjects.campaign import Campaign
+
+try:
+    from pytrends.request import TrendReq
+
+    PYTRENDS_AVAILABLE = True
+except ImportError:
+    print("⚠️ PyTrends module not available. Trend analysis features will be disabled.")
+    TrendReq = None
+    PYTRENDS_AVAILABLE = False
+
+try:
+    from facebook_business.api import FacebookAdsApi
+    from facebook_business.adobjects.campaign import Campaign
+
+    FACEBOOK_BUSINESS_AVAILABLE = True
+except ImportError:
+    print(
+        "⚠️ Facebook Business module not available. Facebook advertising features will be disabled."
+    )
+    FacebookAdsApi = None
+    Campaign = None
+    FACEBOOK_BUSINESS_AVAILABLE = False
 
 load_dotenv()
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
@@ -29,9 +48,13 @@ YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 SHOPIFY_API_KEY = os.getenv("SHOPIFY_API_KEY") if SHOPIFY_AVAILABLE else None
 SHOPIFY_PASSWORD = os.getenv("SHOPIFY_PASSWORD") if SHOPIFY_AVAILABLE else None
 SHOPIFY_STORE = os.getenv("SHOPIFY_STORE") if SHOPIFY_AVAILABLE else None
-FACEBOOK_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN")
-FACEBOOK_APP_ID = os.getenv("FACEBOOK_APP_ID")
-FACEBOOK_APP_SECRET = os.getenv("FACEBOOK_APP_SECRET")
+FACEBOOK_ACCESS_TOKEN = (
+    os.getenv("FACEBOOK_ACCESS_TOKEN") if FACEBOOK_BUSINESS_AVAILABLE else None
+)
+FACEBOOK_APP_ID = os.getenv("FACEBOOK_APP_ID") if FACEBOOK_BUSINESS_AVAILABLE else None
+FACEBOOK_APP_SECRET = (
+    os.getenv("FACEBOOK_APP_SECRET") if FACEBOOK_BUSINESS_AVAILABLE else None
+)
 GOOGLE_ADS_API_KEY = os.getenv("GOOGLE_ADS_API_KEY")
 MODELSLAB_API_KEY = os.getenv("MODELSLAB_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
