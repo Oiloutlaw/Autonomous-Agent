@@ -16,3 +16,5 @@ shopify-api
 pytrends
 facebook-business
 elevenlabs==2.8.1
+azure-ai-inference
+apscheduler
