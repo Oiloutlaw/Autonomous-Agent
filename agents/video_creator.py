@@ -1,4 +1,5 @@
 import os
+import sys
 import openai
 import requests
 import time
@@ -6,6 +7,13 @@ import subprocess
 from PIL import Image
 from io import BytesIO
 from dotenv import load_dotenv
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).parent.parent))
+from utils.platform_utils import (
+    get_ffmpeg_command, normalize_path, run_command, 
+    ensure_directory, get_repo_dir
+)
 
 try:
     from elevenlabs.client import ElevenLabs
@@ -23,12 +31,16 @@ load_dotenv()
 
 def log_action(agent, action, reward=0):
     """Import the logging function from the main launcher"""
-    import sys
-
-    sys.path.append("/home/ubuntu/repos/Autonomous-Agent")
-    from SelfHealingLauncher import log_action as main_log_action
-
-    main_log_action(agent, action, reward)
+    repo_dir = get_repo_dir()
+    if repo_dir not in sys.path:
+        sys.path.append(repo_dir)
+    
+    try:
+        from SelfHealingLauncher import log_action as main_log_action
+        main_log_action(agent, action, reward)
+    except ImportError as e:
+        print(f"⚠️ Could not import logging function: {e}")
+        print(f"[{agent}] {action} (Reward: {reward})")
 
 
 class VideoCreatorAgent:
@@ -39,8 +51,8 @@ class VideoCreatorAgent:
             ElevenLabs(api_key=self.eleven_key) if ELEVENLABS_AVAILABLE else None
         )
         self.stability_key = os.getenv("MODELSLAB_API_KEY")
-        self.output_dir = "output"
-        os.makedirs(self.output_dir, exist_ok=True)
+        self.output_dir = normalize_path("output")
+        ensure_directory(self.output_dir)
 
     def execute_task(self, script_text):
         """Main entry point for CrewAI Agent integration"""
@@ -137,21 +149,27 @@ SCRIPT:
     def generate_voiceover(self, text, filename):
         """Generate voiceover using ElevenLabs"""
         if not ELEVENLABS_AVAILABLE or not self.elevenlabs_client:
-            print("⚠️ ElevenLabs not available, skipping voiceover generation")
-            out_path = os.path.join(self.output_dir, filename)
-            cmd = [
-                "ffmpeg",
-                "-y",
-                "-f",
-                "lavfi",
-                "-i",
-                "anullsrc=duration=3",
-                "-c:a",
-                "aac",
-                out_path,
-            ]
-            subprocess.run(cmd, check=True)
-            return out_path
+            print("⚠️ ElevenLabs not available, generating silent audio")
+            out_path = normalize_path(os.path.join(self.output_dir, filename))
+            
+            try:
+                ffmpeg_cmd = get_ffmpeg_command()
+                cmd = [
+                    ffmpeg_cmd,
+                    "-y",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "anullsrc=duration=3",
+                    "-c:a",
+                    "aac",
+                    out_path,
+                ]
+                subprocess.run(cmd, check=True)
+                return out_path
+            except RuntimeError as e:
+                print(f"❌ {e}")
+                raise
 
         audio_generator = self.elevenlabs_client.text_to_speech.convert(
             text=text,
@@ -179,17 +197,23 @@ SCRIPT:
             inputs.append((image_path, audio_path))
 
         segment_paths = []
+        try:
+            ffmpeg_cmd = get_ffmpeg_command()
+        except RuntimeError as e:
+            print(f"❌ {e}")
+            raise
+            
         for i, (img, audio) in enumerate(inputs):
-            output_path = os.path.join(self.output_dir, f"segment_{i:02d}.mp4")
+            output_path = normalize_path(os.path.join(self.output_dir, f"segment_{i:02d}.mp4"))
             cmd = [
-                "ffmpeg",
+                ffmpeg_cmd,
                 "-y",
                 "-loop",
                 "1",
                 "-i",
-                img,
+                normalize_path(img),
                 "-i",
-                audio,
+                normalize_path(audio),
                 "-c:v",
                 "libx264",
                 "-tune",
@@ -206,20 +230,28 @@ SCRIPT:
             subprocess.run(cmd, check=True)
             segment_paths.append(output_path)
 
-        with open(os.path.join(self.output_dir, "segments.txt"), "w") as f:
+        segments_file = normalize_path(os.path.join(self.output_dir, "segments.txt"))
+        with open(segments_file, "w") as f:
             for seg in segment_paths:
-                f.write(f"file '{os.path.abspath(seg)}'\n")
+                abs_path = os.path.abspath(seg).replace('\\', '/')
+                f.write(f"file '{abs_path}'\n")
 
-        final_video = os.path.join(self.output_dir, "final_video.mp4")
+        final_video = normalize_path(os.path.join(self.output_dir, "final_video.mp4"))
+        try:
+            ffmpeg_cmd = get_ffmpeg_command()
+        except RuntimeError as e:
+            print(f"❌ {e}")
+            raise
+            
         cmd = [
-            "ffmpeg",
+            ffmpeg_cmd,
             "-y",
             "-f",
             "concat",
             "-safe",
             "0",
             "-i",
-            os.path.join(self.output_dir, "segments.txt"),
+            segments_file,
             "-c",
             "copy",
             final_video,

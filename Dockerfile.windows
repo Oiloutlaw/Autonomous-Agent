@@ -1,0 +1,42 @@
+# Windows-compatible Dockerfile for Autonomous Agent
+FROM mcr.microsoft.com/windows/servercore:ltsc2022
+
+# Install Chocolatey package manager
+RUN powershell -Command \
+    "Set-ExecutionPolicy Bypass -Scope Process -Force; \
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; \
+    iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"
+
+# Install Python, FFmpeg, and other dependencies via Chocolatey
+RUN choco install -y python3 ffmpeg git
+
+# Install Terraform
+RUN choco install -y terraform
+
+# Set working directory
+WORKDIR C:\app
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN python -m pip install --upgrade pip
+RUN python -m pip install -r requirements.txt
+
+# Install Playwright browsers
+RUN python -m playwright install
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir output
+RUN mkdir logs
+
+# Set environment variables
+ENV PYTHONPATH=C:\app
+ENV PATH="C:\app;${PATH}"
+
+# Expose port
+EXPOSE 8000
+
+# Default command
+CMD ["python", "autonomous_agent.py"]

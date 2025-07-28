@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import threading
 import queue
@@ -9,6 +10,10 @@ from dotenv import load_dotenv
 import stripe
 import openai
 from crewai import Agent, Task, Crew
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).parent))
+from utils.platform_utils import normalize_path, ensure_directory
 
 try:
     import shopify
@@ -86,7 +91,8 @@ def log_action(agent, action, reward=0):
     shared_data["log"].append(
         {"timestamp": timestamp, "agent": agent, "action": action}
     )
-    conn = sqlite3.connect("agent_memory.db")
+    db_path = normalize_path("agent_memory.db")
+    conn = sqlite3.connect(db_path)
     c = conn.cursor()
     c.execute(
         "INSERT INTO actions VALUES (?, ?, ?, ?)", (timestamp, agent, action, reward)
@@ -97,7 +103,8 @@ def log_action(agent, action, reward=0):
 
 
 def init_memory():
-    conn = sqlite3.connect("agent_memory.db")
+    db_path = normalize_path("agent_memory.db")
+    conn = sqlite3.connect(db_path)
     c = conn.cursor()
     c.execute(
         """CREATE TABLE IF NOT EXISTS actions (
@@ -124,7 +131,8 @@ def check_youtube_monetization():
 
 
 def create_stub_agents():
-    os.makedirs("agents", exist_ok=True)
+    agents_dir = normalize_path("agents")
+    ensure_directory(agents_dir)
     for name in [
         "trend_scanner.py",
         "script_writer.py",
@@ -138,7 +146,7 @@ def create_stub_agents():
         "vendor_finder_agent.py",
         "store_advertiser_agent.py",
     ]:
-        path = os.path.join("agents", name)
+        path = normalize_path(os.path.join("agents", name))
         if not os.path.exists(path):
             with open(path, "w") as f:
                 f.write(f'print("🚀 Agent active: {name}")')

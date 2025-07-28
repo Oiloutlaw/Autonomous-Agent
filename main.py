@@ -328,8 +328,15 @@ def create_video_from_scenes(scenes, output_file):
             for audio_file in audio_files:
                 f.write(f"file '{audio_file}'\n")
         
+        try:
+            from utils.platform_utils import get_ffmpeg_command
+            ffmpeg_cmd = get_ffmpeg_command()
+        except (ImportError, RuntimeError) as e:
+            print(f"❌ FFmpeg not available: {e}")
+            return False
+            
         cmd = [
-            'ffmpeg', '-f', 'concat', '-safe', '0', '-i', concat_list,
+            ffmpeg_cmd, '-f', 'concat', '-safe', '0', '-i', concat_list,
             '-c', 'copy', output_file, '-y'
         ]
         
