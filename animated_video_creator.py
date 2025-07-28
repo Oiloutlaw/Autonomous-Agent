@@ -1,4 +1,5 @@
 import os
+import sys
 import openai
 import requests
 import time
@@ -10,6 +11,10 @@ from flask import Flask, request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 import sqlite3
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).parent))
+from utils.platform_utils import get_ffmpeg_command, normalize_path, ensure_directory
 
 load_dotenv()
 
@@ -18,10 +23,10 @@ eleven_key = os.getenv("ELEVENLABS_API_KEY")
 MODELSLAB_KEY = os.getenv("MODELSLAB_API_KEY")
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 YOUTUBE_CLIENT_SECRET = os.getenv("YOUTUBE_CLIENT_SECRET")
-DB_PATH = "video_logs.db"
+DB_PATH = normalize_path("video_logs.db")
 
-output_dir = "output"
-os.makedirs(output_dir, exist_ok=True)
+output_dir = normalize_path("output")
+ensure_directory(output_dir)
 
 app = Flask(__name__)
 
@@ -109,7 +114,7 @@ def generate_video(prompt_text, idx):
     except Exception as e:
         raise RuntimeError(f"❌ Failed to download generated video: {e}")
 
-    vid_path = os.path.join(output_dir, f"scene_{idx:02d}.mp4")
+    vid_path = normalize_path(os.path.join(output_dir, f"scene_{idx:02d}.mp4"))
     with open(vid_path, "wb") as f:
         f.write(vid_data)
     return vid_path
@@ -122,7 +127,7 @@ def generate_voiceover(text, filename):
         model="eleven_monolingual_v1",
         api_key=eleven_key
     )
-    out_path = os.path.join(output_dir, filename)
+    out_path = normalize_path(os.path.join(output_dir, filename))
     with open(out_path, "wb") as f:
         f.write(audio)
     return out_path
@@ -138,11 +143,17 @@ def create_video(scenes):
         video_path = generate_video(prompt, i)
         audio_path = generate_voiceover(narration, f"audio_{i:02d}.mp3")
 
-        output_path = os.path.join(output_dir, f"clip_{i:02d}.mp4")
+        output_path = normalize_path(os.path.join(output_dir, f"clip_{i:02d}.mp4"))
+        try:
+            ffmpeg_cmd = get_ffmpeg_command()
+        except RuntimeError as e:
+            print(f"❌ {e}")
+            raise
+            
         cmd = [
-            "ffmpeg", "-y",
-            "-i", video_path,
-            "-i", audio_path,
+            ffmpeg_cmd, "-y",
+            "-i", normalize_path(video_path),
+            "-i", normalize_path(audio_path),
             "-c:v", "libx264", "-c:a", "aac",
             "-shortest", "-pix_fmt", "yuv420p",
             output_path
@@ -150,13 +161,20 @@ def create_video(scenes):
         subprocess.run(cmd, check=True)
         inputs.append(output_path)
 
-    concat_file = os.path.join(output_dir, "segments.txt")
+    concat_file = normalize_path(os.path.join(output_dir, "segments.txt"))
     with open(concat_file, "w") as f:
         for clip in inputs:
-            f.write(f"file '{os.path.abspath(clip)}'\n")
+            abs_path = os.path.abspath(clip).replace('\\', '/')
+            f.write(f"file '{abs_path}'\n")
 
-    final_video = os.path.join(output_dir, "final_video.mp4")
-    cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_file, "-c", "copy", final_video]
+    final_video = normalize_path(os.path.join(output_dir, "final_video.mp4"))
+    try:
+        ffmpeg_cmd = get_ffmpeg_command()
+    except RuntimeError as e:
+        print(f"❌ {e}")
+        raise
+        
+    cmd = [ffmpeg_cmd, "-y", "-f", "concat", "-safe", "0", "-i", concat_file, "-c", "copy", final_video]
     subprocess.run(cmd, check=True)
     print(f"🎉 Final video created: {final_video}")
     return final_video

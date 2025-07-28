@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import threading
 import queue
@@ -19,11 +20,18 @@ import random
 from flask import Flask, jsonify, request
 import stripe
 from crewai import Agent, Task, Crew
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).parent))
+from utils.platform_utils import (
+    normalize_path, get_terraform_command, format_shell_command,
+    run_command, get_tor_config, check_dependency, is_windows
+)
 
 load_dotenv()
 
 faker = Faker()
-DB_PATH = 'agent_memory.db'
+DB_PATH = normalize_path('agent_memory.db')
 TOR_PASSWORD = os.getenv('TOR_PASSWORD')
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
@@ -107,12 +115,21 @@ def init_memory():
     conn.close()
 
 def rotate_proxy():
+    print("\U0001f501 Rotating proxy via Tor...")
+    tor_config = get_tor_config()
+    
+    if not check_dependency('tor', tor_config['install_instructions']):
+        print("⚠️ Tor not available, skipping proxy rotation")
+        return
+    
     try:
-        with Controller.from_port(port=9051) as controller:
+        with Controller.from_port(port=tor_config['control_port']) as controller:
             controller.authenticate(password=TOR_PASSWORD)
             controller.signal(Signal.NEWNYM)
     except Exception as e:
         print(f"⚠️ Tor rotation failed: {e}")
+        if is_windows():
+            print("💡 On Windows, ensure Tor service is running and control port is configured")
 
 def monitor_rss(url):
     feed = feedparser.parse(url)
@@ -146,12 +163,27 @@ def monitor_youtube_comments(video_id):
         print(f"❌ YouTube comment error: {e}")
 
 def deploy_infrastructure():
+    print("☁️ Deploying infra via Terraform...")
+    
+    try:
+        terraform_cmd = get_terraform_command()
+    except RuntimeError as e:
+        print(f"❌ {e}")
+        return
+    
+    original_dir = os.getcwd()
     try:
         os.chdir("infra")
-        subprocess.run("terraform init && terraform apply -auto-approve", shell=True, check=True)
-        os.chdir("..")
+        commands = [
+            f"{terraform_cmd} init",
+            f"{terraform_cmd} apply -auto-approve"
+        ]
+        shell_cmd = format_shell_command(commands)
+        run_command(shell_cmd)
     except Exception as e:
         print(f"❌ Infrastructure deployment failed: {e}")
+    finally:
+        os.chdir(original_dir)
 
 def update_metrics():
     increment = random.randint(100, 1000)

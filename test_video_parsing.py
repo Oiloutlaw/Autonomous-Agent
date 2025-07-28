@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 import sys
-sys.path.append('/home/ubuntu/repos/Autonomous-Agent/agents')
+import os
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).parent))
+from utils.platform_utils import get_repo_dir
+
+repo_dir = get_repo_dir()
+agents_dir = os.path.join(repo_dir, 'agents')
+if agents_dir not in sys.path:
+    sys.path.append(agents_dir)
+
 from video_creator import VideoCreatorAgent
 
 def test_parsing():

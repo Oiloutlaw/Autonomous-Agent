@@ -24,11 +24,19 @@ load_dotenv()
 def log_action(agent, action, reward=0):
     """Import the logging function from the main launcher"""
     import sys
+    import os
+    from pathlib import Path
 
-    sys.path.append("/home/ubuntu/repos/Autonomous-Agent")
-    from SelfHealingLauncher import log_action as main_log_action
-
-    main_log_action(agent, action, reward)
+    repo_dir = str(Path(__file__).parent.parent)
+    if repo_dir not in sys.path:
+        sys.path.append(repo_dir)
+    
+    try:
+        from SelfHealingLauncher import log_action as main_log_action
+        main_log_action(agent, action, reward)
+    except ImportError as e:
+        print(f"⚠️ Could not import logging function: {e}")
+        print(f"[{agent}] {action} (Reward: {reward})")
 
 
 class VideoCreatorAgent:

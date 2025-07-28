@@ -8,3 +8,17 @@ services:
     environment:
       - TOR_PASSWORD=${TOR_PASSWORD}
       - AGENT_EMAIL=${AGENT_EMAIL}
+  
+  agent-windows:
+    build:
+      context: .
+      dockerfile: Dockerfile.windows
+    ports:
+      - "8001:8000"
+    volumes:
+      - .:/app
+    environment:
+      - TOR_PASSWORD=${TOR_PASSWORD}
+      - AGENT_EMAIL=${AGENT_EMAIL}
+    profiles:
+      - windows

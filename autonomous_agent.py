@@ -16,14 +16,19 @@ import queue
 import random
 from flask import Flask, jsonify
 import sqlite3
+from utils.platform_utils import (
+    is_windows, get_secrets_dir, get_repo_dir, normalize_path,
+    run_command, get_terraform_command, get_tor_config, check_dependency,
+    format_shell_command
+)
 
 # Load `.env` if present
 load_dotenv()
 
 faker = Faker()
 TOR_PASSWORD = os.getenv('TOR_PASSWORD')
-SECRETS_DIR = '/run/secrets'
-DB_PATH = 'agent_memory.db'
+SECRETS_DIR = get_secrets_dir()
+DB_PATH = normalize_path('agent_memory.db')
 
 SECRET_NAMES = [
     'openai_api_key', 'github_token', 'stripe_secret_key',
@@ -62,12 +67,20 @@ def log_action(agent, action, reward):
 
 def rotate_proxy():
     print("\U0001f501 Rotating proxy via Tor...")
+    tor_config = get_tor_config()
+    
+    if not check_dependency('tor', tor_config['install_instructions']):
+        print("⚠️ Tor not available, skipping proxy rotation")
+        return
+    
     try:
-        with Controller.from_port(port=9051) as controller:
+        with Controller.from_port(port=tor_config['control_port']) as controller:
             controller.authenticate(password=TOR_PASSWORD)
             controller.signal(Signal.NEWNYM)
     except Exception as e:
         print(f"⚠️ Tor rotation failed: {e}")
+        if is_windows():
+            print("💡 On Windows, ensure Tor service is running and control port is configured")
 
 def solve_captcha(site_key, url):
     print(f"\U0001f9e0 Solving CAPTCHA for {url} with key {site_key} (simulated)")
@@ -131,9 +144,9 @@ reddit = praw.Reddit(
     user_agent=fetch_or_register_api('reddit_user_agent', 'https://www.reddit.com/register') or 'auto-agent/1.0'
 )
 
-def run_command(cmd):
-    print(f"▶️ {cmd}")
-    subprocess.run(cmd, shell=True, check=True)
+def run_shell_command(cmd):
+    """Wrapper for shell commands - use run_command from platform_utils instead"""
+    return run_command(cmd)
 
 def monitor_rss(feed_url):
     print(f"\U0001f504 Checking RSS: {feed_url}")
@@ -173,9 +186,24 @@ def format_and_package():
 
 def deploy_infrastructure():
     print("☁️ Deploying infra via Terraform...")
-    os.chdir("infra")
-    run_command("terraform init && terraform apply -auto-approve")
-    os.chdir("..")
+    
+    try:
+        terraform_cmd = get_terraform_command()
+    except RuntimeError as e:
+        print(f"❌ {e}")
+        return
+    
+    original_dir = os.getcwd()
+    try:
+        os.chdir("infra")
+        commands = [
+            f"{terraform_cmd} init",
+            f"{terraform_cmd} apply -auto-approve"
+        ]
+        shell_cmd = format_shell_command(commands)
+        run_command(shell_cmd)
+    finally:
+        os.chdir(original_dir)
 
 def setup_fulfillment():
     print("💳 Setting up Stripe and emailing via AWS SES...")

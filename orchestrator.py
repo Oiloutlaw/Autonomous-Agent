@@ -1,9 +1,17 @@
 import os
+import sys
 import time
 import subprocess
 import openai
 import praw
 from dotenv import load_dotenv
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).parent))
+from utils.platform_utils import (
+    get_secrets_dir, normalize_path, run_command, 
+    get_terraform_command, format_shell_command
+)
 
 # Load `.env` if present
 load_dotenv()
@@ -25,13 +33,13 @@ SECRET_NAMES = [
     'reddit_user_agent',
     'agent_email'
 ]
-SECRETS_DIR = '/run/secrets'
+SECRETS_DIR = get_secrets_dir()
 
 def load_secret(name):
     env_key = name.upper()
     if env_key in os.environ:
         return os.getenv(env_key)
-    path = os.path.join(SECRETS_DIR, name)
+    path = normalize_path(os.path.join(SECRETS_DIR, name))
     if os.path.isfile(path):
         with open(path, 'r') as f:
             return f.read().strip()
@@ -51,9 +59,9 @@ reddit = praw.Reddit(
     user_agent=load_secret('reddit_user_agent')
 )
 
-def run_command(cmd):
-    print(f"▶️ {cmd}")
-    subprocess.run(cmd, shell=True, check=True)
+def run_shell_command(cmd):
+    """Wrapper for shell commands - use run_command from platform_utils instead"""
+    return run_command(cmd)
 
 def discover_and_validate():
     print("🔍 Discovering niches...")
@@ -66,9 +74,24 @@ def format_and_package():
 
 def deploy_infrastructure():
     print("☁️ Deploying infra via Terraform...")
-    os.chdir("infra")
-    run_command("terraform init && terraform apply -auto-approve")
-    os.chdir("..")
+    
+    try:
+        terraform_cmd = get_terraform_command()
+    except RuntimeError as e:
+        print(f"❌ {e}")
+        return
+    
+    original_dir = os.getcwd()
+    try:
+        os.chdir("infra")
+        commands = [
+            f"{terraform_cmd} init",
+            f"{terraform_cmd} apply -auto-approve"
+        ]
+        shell_cmd = format_shell_command(commands)
+        run_command(shell_cmd)
+    finally:
+        os.chdir(original_dir)
 
 def setup_fulfillment():
     print("💳 Setting up Stripe and emailing via AWS SES...")

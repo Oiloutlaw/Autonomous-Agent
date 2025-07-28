@@ -8,7 +8,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-sys.path.append(os.path.join(os.path.dirname(__file__), 'agents'))
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent))
+from utils.platform_utils import get_repo_dir
+
+repo_dir = get_repo_dir()
+agents_dir = os.path.join(repo_dir, 'agents')
+if agents_dir not in sys.path:
+    sys.path.append(agents_dir)
 
 def test_video_generation():
     """Test video generation with a simple script"""
