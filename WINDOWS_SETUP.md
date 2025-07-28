@@ -205,4 +205,27 @@ For Windows-specific issues:
 4. Check GitHub Issues for known problems
 5. Consider using WSL2 for a Linux-like environment
 
+## Building Executable
+
+To build the Windows executable from source:
+
+### Prerequisites for Building
+- Python 3.8 or higher
+- All dependencies installed: `pip install -r requirements.txt`
+- PyInstaller: `pip install pyinstaller`
+
+### Build Process
+```powershell
+# Build the executable
+python build_exe.py
+
+# The executable will be created in dist/AutonomousAgent.exe
+```
+
+### Testing the Executable
+1. Copy the generated `dist/AutonomousAgent.exe` to a clean directory
+2. Copy your `.env` file to the same directory
+3. Run: `AutonomousAgent.exe`
+4. Verify the Flask server starts on http://localhost:8000
+
 The system maintains full backward compatibility with Linux/Unix while providing native Windows support.
