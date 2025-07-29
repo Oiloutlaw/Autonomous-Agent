@@ -248,9 +248,9 @@ def get_youtube_service():
             import json
             import tempfile
             
-            oauth_data = os.getenv('GoogleOAuth2')
+            oauth_data = load_secret('GoogleOAuth2')
             if not oauth_data:
-                raise ValueError("GoogleOAuth2 environment variable not found")
+                raise ValueError("GoogleOAuth2 credentials not found in environment or secrets")
             
             try:
                 client_config = json.loads(oauth_data)
@@ -582,6 +582,8 @@ def switch_ai():
 
 def load_secret(name):
     """Load secret from environment or secrets directory"""
+    if name in os.environ:
+        return os.getenv(name)
     env_key = name.upper()
     if env_key in os.environ:
         return os.getenv(env_key)
