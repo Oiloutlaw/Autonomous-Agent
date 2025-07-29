@@ -27,7 +27,13 @@ from flask import Flask, jsonify, request
 import stripe
 from crewai import Agent, Task, Crew
 from apscheduler.schedulers.background import BackgroundScheduler
-import elevenlabs
+try:
+    from elevenlabs.client import ElevenLabs
+    ELEVENLABS_AVAILABLE = True
+except ImportError:
+    print("⚠️ ElevenLabs module not available. Voice generation features will be disabled.")
+    ElevenLabs = None
+    ELEVENLABS_AVAILABLE = False
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.auth.transport.requests import Request
@@ -295,15 +301,21 @@ def generate_voiceover(text, output_file):
             print("❌ ElevenLabs API key not found")
             return False
             
-        elevenlabs.set_api_key(ELEVENLABS_API_KEY)
-        audio = elevenlabs.generate(
+        if not ELEVENLABS_AVAILABLE or ElevenLabs is None:
+            print("❌ ElevenLabs module not available")
+            return False
+            
+        client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+        audio_generator = client.text_to_speech.convert(
             text=text,
-            voice="Adam",
-            model="eleven_monolingual_v1"
+            voice_id="JBFqnCBsd6RMkjVDRZzb",
+            model_id="eleven_multilingual_v2"
         )
         
         with open(output_file, 'wb') as f:
-            f.write(audio)
+            for chunk in audio_generator:
+                if isinstance(chunk, bytes):
+                    f.write(chunk)
         
         return True
     except Exception as e:
@@ -436,9 +448,15 @@ def infrastructure_loop():
             
             shared_data["infrastructure_agents_active"] += 1
             
+            discover_and_validate()
+            deploy_infrastructure()
+            
+            shared_data["infrastructure_agents_active"] -= 1
+            
         except Exception as e:
             print(f"❌ Infrastructure loop error: {e}")
             log_action("infrastructure_agent", f"Error: {e}", -5)
+            shared_data["infrastructure_agents_active"] -= 1
         
         time.sleep(3600)
 
@@ -501,7 +519,187 @@ def switch_ai():
         return jsonify({"ai_provider": shared_data["ai_provider"]})
     return jsonify({"error": "Invalid provider"}), 400
 
-def main():
+def load_secret(name):
+    """Load secret from environment or secrets directory"""
+    env_key = name.upper()
+    if env_key in os.environ:
+        return os.getenv(env_key)
+    secrets_dir = "/run/secrets"
+    path = os.path.join(secrets_dir, name)
+    if os.path.isfile(path):
+        with open(path, 'r') as f:
+            return f.read().strip()
+    return None
+
+def monitor_rss(feed_url):
+    """Monitor RSS feed"""
+    print(f"🔄 Checking RSS: {feed_url}")
+    try:
+        feed = feedparser.parse(feed_url)
+        for entry in feed.entries[:3]:
+            print(f"📰 {entry.title} — {entry.link}")
+    except Exception as e:
+        print(f"❌ RSS monitoring failed: {e}")
+
+def monitor_reddit(subreddit_name="entrepreneur"):
+    """Monitor Reddit subreddit"""
+    print(f"👀 Monitoring Reddit: r/{subreddit_name}")
+    try:
+        reddit = praw.Reddit(
+            client_id=load_secret('reddit_client_id') or '',
+            client_secret=load_secret('reddit_client_secret') or '',
+            user_agent=load_secret('reddit_user_agent') or 'auto-agent/1.0'
+        )
+        subreddit = reddit.subreddit(subreddit_name)
+        for post in subreddit.new(limit=3):
+            print(f"📢 {post.title} — {post.url}")
+    except Exception as e:
+        print(f"❌ Reddit monitoring failed: {e}")
+
+def discover_and_validate():
+    """Discovery and validation phase"""
+    rotate_proxy()
+    monitor_rss("https://hnrss.org/frontpage")
+    monitor_reddit("smallbusiness")
+
+def deploy_infrastructure():
+    """Deploy infrastructure via Terraform"""
+    print("☁️ Deploying infra via Terraform...")
+    try:
+        original_dir = os.getcwd()
+        os.chdir("infra")
+        subprocess.run(["terraform", "init"], check=True)
+        subprocess.run(["terraform", "apply", "-auto-approve"], check=True)
+        os.chdir(original_dir)
+        print("✅ Infrastructure deployed successfully")
+    except Exception as e:
+        print(f"❌ Infrastructure deployment failed: {e}")
+        if 'original_dir' in locals():
+            os.chdir(original_dir)
+
+def create_stub_agents():
+    """Create stub agent files"""
+    agents_dir = "agents"
+    os.makedirs(agents_dir, exist_ok=True)
+    for name in [
+        "trend_scanner.py",
+        "script_writer.py", 
+        "thumbnail_designer.py",
+        "video_creator.py",
+        "uploader.py",
+        "seo_optimizer.py",
+        "monetization_checker.py",
+        "shopify_store_agent.py",
+        "trending_product_agent.py",
+        "vendor_finder_agent.py",
+        "store_advertiser_agent.py",
+    ]:
+        path = os.path.join("agents", name)
+        if not os.path.exists(path):
+            with open(path, "w") as f:
+                f.write(f'print("🚀 Agent active: {name}")')
+
+def run_pipeline():
+    """Run CrewAI pipeline"""
+    trend_scanner = Agent(
+        role="TrendScout", goal="Find viral topics", backstory="Scans social trends"
+    )
+    script_writer = Agent(
+        role="ScriptWriter",
+        goal="Write viral scripts", 
+        backstory="Writes short-form scripts",
+    )
+    thumbnail_designer = Agent(
+        role="ThumbnailCreator",
+        goal="Design thumbnails",
+        backstory="Creates visual hooks",
+    )
+    video_creator = Agent(
+        role="VideoProducer", goal="Make video", backstory="Edits and narrates content"
+    )
+    uploader = Agent(
+        role="YouTubePublisher", goal="Upload to YouTube", backstory="Publishes content"
+    )
+    seo_optimizer = Agent(
+        role="SEOOptimizer", goal="Optimize metadata", backstory="Boosts visibility"
+    )
+    monetization_checker = Agent(
+        role="MonetizationChecker",
+        goal="Check YouTube eligibility",
+        backstory="Monitors monetization",
+    )
+
+    core_tasks = [
+        Task(
+            agent=trend_scanner,
+            description="Find a viral idea",
+            expected_output="Trending topic identified",
+        ),
+        Task(
+            agent=script_writer,
+            description="Write a 60s script",
+            expected_output="60-second video script",
+        ),
+        Task(
+            agent=thumbnail_designer,
+            description="Design a thumbnail", 
+            expected_output="Thumbnail image file",
+        ),
+        Task(
+            agent=video_creator,
+            description="Create a video",
+            expected_output="Short video file",
+        ),
+        Task(
+            agent=uploader,
+            description="Upload to YouTube",
+            expected_output="YouTube video published",
+        ),
+        Task(
+            agent=seo_optimizer,
+            description="Optimize for SEO",
+            expected_output="Optimized metadata",
+        ),
+        Task(
+            agent=monetization_checker,
+            description="Log monetization status",
+            expected_output="Monetization report",
+        ),
+    ]
+
+    core_agents = [
+        trend_scanner,
+        script_writer,
+        thumbnail_designer,
+        video_creator,
+        uploader,
+        seo_optimizer,
+        monetization_checker,
+    ]
+
+    crew = Crew(agents=core_agents, tasks=core_tasks)
+
+    try:
+        crew.kickoff()
+        log_action("crew", "CrewAI pipeline completed", 500)
+    except Exception as e:
+        print("❌ ERROR during CrewAI execution:")
+        import traceback
+        traceback.print_exc()
+        log_action("crew", f"Pipeline error: {str(e)}", -10)
+
+def run_pipeline_loop(interval_minutes=30):
+    """Run CrewAI pipeline in a loop"""
+    while True:
+        if not shared_data["paused"]:
+            try:
+                run_pipeline()
+            except Exception as e:
+                print(f"❌ CrewAI pipeline error: {e}")
+                log_action("crew", f"Pipeline error: {str(e)}", -10)
+        time.sleep(interval_minutes * 60)
+
+def main(mode="unified"):
     """Main entry point for unified autonomous agent system"""
     print("🚀 Starting Unified Autonomous Agent System...")
     print("=" * 60)
@@ -523,21 +721,33 @@ def main():
     threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8000, debug=False), daemon=True).start()
     print("📊 Server: http://localhost:8000/status")
     
+    if mode in ["unified", "crewai"]:
+        print("🎭 Creating stub agents...")
+        create_stub_agents()
+    
     print("🎬 Starting video generation scheduler...")
     scheduler = BackgroundScheduler()
     scheduler.add_job(run_video_creator, 'interval', minutes=15)
     scheduler.start()
     
-    print("📝 Starting content pipeline...")
-    content_proc = multiprocessing.Process(target=content_loop)
-    content_proc.start()
+    processes = []
     
-    print("🏗️ Starting infrastructure agents...")
-    infra_procs = []
-    for i in range(2):
-        p = multiprocessing.Process(target=infrastructure_loop)
-        p.start()
-        infra_procs.append(p)
+    if mode in ["unified", "basic"]:
+        print("📝 Starting content pipeline...")
+        content_proc = multiprocessing.Process(target=content_loop)
+        content_proc.start()
+        processes.append(content_proc)
+        
+        print("🏗️ Starting infrastructure agents...")
+        for i in range(2):
+            p = multiprocessing.Process(target=infrastructure_loop)
+            p.start()
+            processes.append(p)
+    
+    if mode in ["unified", "crewai"]:
+        print("🎭 Starting CrewAI pipeline...")
+        crewai_thread = threading.Thread(target=lambda: run_pipeline_loop(30), daemon=True)
+        crewai_thread.start()
     
     print("=" * 60)
     print("✅ Unified Autonomous Agent System is running!")
@@ -545,17 +755,17 @@ def main():
     print("🎬 Video generation: Every 15 minutes")
     print("📝 Content pipeline: Every 60 minutes")
     print("🏗️ Infrastructure: Every 60 minutes")
+    if mode in ["unified", "crewai"]:
+        print("🎭 CrewAI pipeline: Every 30 minutes")
     print("=" * 60)
     
     try:
-        content_proc.join()
-        for p in infra_procs:
+        for p in processes:
             p.join()
     except KeyboardInterrupt:
         print("\n🛑 Shutting down...")
         scheduler.shutdown()
-        content_proc.terminate()
-        for p in infra_procs:
+        for p in processes:
             p.terminate()
         print("✅ Shutdown complete")
 
