@@ -373,6 +373,8 @@ def run_video_creator():
     try:
         print("🎬 Starting video creation...")
         
+        os.makedirs("output", exist_ok=True)
+        
         topic = generate_ai_content("Generate a trending topic for a YouTube video", 
                                    "You are a trend analyst. Suggest one specific, engaging topic.")
         
@@ -390,13 +392,17 @@ def run_video_creator():
         scenes = break_script_into_scenes(script)
         print(f"🎭 Created {len(scenes)} scenes")
         
-        video_file = f"video_{int(time.time())}.mp3"
+        timestamp = int(time.time())
+        video_file = f"output/video_{timestamp}.mp3"
         
         if create_video_from_scenes(scenes, video_file):
             print(f"🎥 Video created: {video_file}")
+            print(f"📁 Video saved to: {os.path.abspath(video_file)}")
             
             title = f"AI Generated: {topic[:50]}..."
             description = f"Auto-generated content about {topic}\n\n{script[:500]}..."
+            
+            log_video_upload(title, description, None, "created")
             
             video_id = upload_to_youtube(video_file, title, description)
             
@@ -404,9 +410,9 @@ def run_video_creator():
                 print(f"✅ Video uploaded: https://youtube.com/watch?v={video_id}")
                 shared_data["revenue"] += 10
                 shared_data["total_revenue"] += 10
-            
-            if os.path.exists(video_file):
-                os.remove(video_file)
+                log_video_upload(title, description, video_id, "uploaded")
+            else:
+                print(f"📁 Video preserved for manual upload: {video_file}")
         
     except Exception as e:
         print(f"❌ Video creation failed: {e}")
