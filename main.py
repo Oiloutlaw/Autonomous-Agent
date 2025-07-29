@@ -207,9 +207,18 @@ def rotate_proxy():
         return False
 
 def check_youtube_monetization():
-    """Check YouTube monetization status"""
+    """Check YouTube monetization status using OAuth2"""
     try:
-        youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
+        if not YOUTUBE_API_KEY and not os.getenv('GoogleOAuth2'):
+            print("⚠️ No YouTube credentials available, skipping monetization check")
+            shared_data["monetization_eligible"] = False
+            return False
+            
+        if os.getenv('GoogleOAuth2'):
+            youtube = get_youtube_service()
+        else:
+            youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
+            
         request = youtube.channels().list(part='monetizationDetails', mine=True)
         response = request.execute()
         
@@ -219,7 +228,7 @@ def check_youtube_monetization():
             shared_data["monetization_eligible"] = monetization.get('access', {}).get('allowed', False)
             return shared_data["monetization_eligible"]
     except Exception as e:
-        print(f"❌ YouTube monetization check failed: {e}")
+        print(f"⚠️ YouTube monetization check skipped: {e}")
         shared_data["monetization_eligible"] = False
     
     return False
