@@ -224,10 +224,38 @@ def check_youtube_monetization():
     
     return False
 
+def get_youtube_service():
+    """Get authenticated YouTube service using OAuth2"""
+    SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
+    
+    creds = None
+    if os.path.exists('token.json'):
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            import json
+            client_secrets = json.loads(os.getenv('GoogleOAuth2'))
+            
+            with open('temp_client_secrets.json', 'w') as f:
+                json.dump(client_secrets, f)
+            
+            flow = InstalledAppFlow.from_client_secrets_file('temp_client_secrets.json', SCOPES)
+            creds = flow.run_local_server(port=0)
+            
+            os.remove('temp_client_secrets.json')
+        
+        with open('token.json', 'w') as token:
+            token.write(creds.to_json())
+    
+    return build('youtube', 'v3', credentials=creds)
+
 def upload_to_youtube(video_file, title, description):
-    """Upload video to YouTube"""
+    """Upload video to YouTube using OAuth2 authentication"""
     try:
-        youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
+        youtube = get_youtube_service()
         
         body = {
             'snippet': {
