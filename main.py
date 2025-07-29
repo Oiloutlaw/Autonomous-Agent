@@ -27,7 +27,13 @@ from flask import Flask, jsonify, request
 import stripe
 from crewai import Agent, Task, Crew
 from apscheduler.schedulers.background import BackgroundScheduler
-import elevenlabs
+try:
+    from elevenlabs.client import ElevenLabs
+    ELEVENLABS_AVAILABLE = True
+except ImportError:
+    print("⚠️ ElevenLabs module not available. Voice generation features will be disabled.")
+    ElevenLabs = None
+    ELEVENLABS_AVAILABLE = False
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.auth.transport.requests import Request
@@ -295,15 +301,21 @@ def generate_voiceover(text, output_file):
             print("❌ ElevenLabs API key not found")
             return False
             
-        elevenlabs.set_api_key(ELEVENLABS_API_KEY)
-        audio = elevenlabs.generate(
+        if not ELEVENLABS_AVAILABLE or ElevenLabs is None:
+            print("❌ ElevenLabs module not available")
+            return False
+            
+        client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+        audio_generator = client.text_to_speech.convert(
             text=text,
-            voice="Adam",
-            model="eleven_monolingual_v1"
+            voice_id="JBFqnCBsd6RMkjVDRZzb",
+            model_id="eleven_multilingual_v2"
         )
         
         with open(output_file, 'wb') as f:
-            f.write(audio)
+            for chunk in audio_generator:
+                if isinstance(chunk, bytes):
+                    f.write(chunk)
         
         return True
     except Exception as e:
