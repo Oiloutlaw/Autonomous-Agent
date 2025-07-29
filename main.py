@@ -237,15 +237,39 @@ def get_youtube_service():
             creds.refresh(Request())
         else:
             import json
-            client_secrets = json.loads(os.getenv('GoogleOAuth2'))
+            import tempfile
             
-            with open('temp_client_secrets.json', 'w') as f:
-                json.dump(client_secrets, f)
+            oauth_data = os.getenv('GoogleOAuth2')
+            if not oauth_data:
+                raise ValueError("GoogleOAuth2 environment variable not found")
             
-            flow = InstalledAppFlow.from_client_secrets_file('temp_client_secrets.json', SCOPES)
-            creds = flow.run_local_server(port=0)
+            try:
+                client_config = json.loads(oauth_data)
+            except json.JSONDecodeError:
+                raise ValueError("GoogleOAuth2 environment variable must contain valid JSON credentials")
             
-            os.remove('temp_client_secrets.json')
+            if 'web' in client_config:
+                web_creds = client_config['web']
+                client_config = {
+                    'installed': {
+                        'client_id': web_creds['client_id'],
+                        'client_secret': web_creds['client_secret'],
+                        'auth_uri': web_creds['auth_uri'],
+                        'token_uri': web_creds['token_uri'],
+                        'auth_provider_x509_cert_url': web_creds.get('auth_provider_x509_cert_url'),
+                        'redirect_uris': ['http://localhost']
+                    }
+                }
+            
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+                json.dump(client_config, temp_file)
+                temp_secrets_path = temp_file.name
+            
+            try:
+                flow = InstalledAppFlow.from_client_secrets_file(temp_secrets_path, SCOPES)
+                creds = flow.run_local_server(port=0)
+            finally:
+                os.unlink(temp_secrets_path)
         
         with open('token.json', 'w') as token:
             token.write(creds.to_json())
