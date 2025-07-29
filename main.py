@@ -224,10 +224,62 @@ def check_youtube_monetization():
     
     return False
 
+def get_youtube_service():
+    """Get authenticated YouTube service using OAuth2"""
+    SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
+    
+    creds = None
+    if os.path.exists('token.json'):
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            import json
+            import tempfile
+            
+            oauth_data = os.getenv('GoogleOAuth2')
+            if not oauth_data:
+                raise ValueError("GoogleOAuth2 environment variable not found")
+            
+            try:
+                client_config = json.loads(oauth_data)
+            except json.JSONDecodeError:
+                raise ValueError("GoogleOAuth2 environment variable must contain valid JSON credentials")
+            
+            if 'web' in client_config:
+                web_creds = client_config['web']
+                client_config = {
+                    'installed': {
+                        'client_id': web_creds['client_id'],
+                        'client_secret': web_creds['client_secret'],
+                        'auth_uri': web_creds['auth_uri'],
+                        'token_uri': web_creds['token_uri'],
+                        'auth_provider_x509_cert_url': web_creds.get('auth_provider_x509_cert_url'),
+                        'redirect_uris': ['http://localhost']
+                    }
+                }
+            
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+                json.dump(client_config, temp_file)
+                temp_secrets_path = temp_file.name
+            
+            try:
+                flow = InstalledAppFlow.from_client_secrets_file(temp_secrets_path, SCOPES)
+                creds = flow.run_local_server(port=0)
+            finally:
+                os.unlink(temp_secrets_path)
+        
+        with open('token.json', 'w') as token:
+            token.write(creds.to_json())
+    
+    return build('youtube', 'v3', credentials=creds)
+
 def upload_to_youtube(video_file, title, description):
-    """Upload video to YouTube"""
+    """Upload video to YouTube using OAuth2 authentication"""
     try:
-        youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
+        youtube = get_youtube_service()
         
         body = {
             'snippet': {
