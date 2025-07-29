@@ -276,7 +276,7 @@ def get_youtube_service():
             
             try:
                 flow = InstalledAppFlow.from_client_secrets_file(temp_secrets_path, SCOPES)
-                creds = flow.run_local_server(port=0)
+                creds = flow.run_local_server(port=8080)
             finally:
                 os.unlink(temp_secrets_path)
         
