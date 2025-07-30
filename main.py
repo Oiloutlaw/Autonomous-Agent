@@ -239,9 +239,9 @@ def get_youtube_service():
             import json
             import tempfile
             
-            oauth_data = os.getenv('GoogleOAuth2')
+            oauth_data = load_secret('GoogleOAuth2')
             if not oauth_data:
-                raise ValueError("GoogleOAuth2 environment variable not found")
+                raise ValueError("GoogleOAuth2 credentials not found in environment or secrets")
             
             try:
                 client_config = json.loads(oauth_data)
@@ -267,7 +267,7 @@ def get_youtube_service():
             
             try:
                 flow = InstalledAppFlow.from_client_secrets_file(temp_secrets_path, SCOPES)
-                creds = flow.run_local_server(port=0)
+                creds = flow.run_local_server(port=8080)
             finally:
                 os.unlink(temp_secrets_path)
         
