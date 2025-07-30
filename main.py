@@ -27,11 +27,15 @@ from flask import Flask, jsonify, request
 import stripe
 from crewai import Agent, Task, Crew
 from apscheduler.schedulers.background import BackgroundScheduler
+
 try:
     from elevenlabs.client import ElevenLabs
+
     ELEVENLABS_AVAILABLE = True
 except ImportError:
-    print("⚠️ ElevenLabs module not available. Voice generation features will be disabled.")
+    print(
+        "⚠️ ElevenLabs module not available. Voice generation features will be disabled."
+    )
     ElevenLabs = None
     ELEVENLABS_AVAILABLE = False
 from googleapiclient.discovery import build
@@ -44,6 +48,7 @@ try:
     from azure.ai.inference import ChatCompletionsClient
     from azure.ai.inference.models import SystemMessage, UserMessage
     from azure.core.credentials import AzureKeyCredential
+
     AZURE_AI_AVAILABLE = True
 except ImportError:
     print("⚠️ Azure AI inference not available. Using OpenAI only.")
@@ -52,9 +57,9 @@ except ImportError:
 load_dotenv()
 
 faker = Faker()
-DB_PATH = 'agent_memory.db'
-VIDEO_DB_PATH = 'video_logs.db'
-TOR_PASSWORD = os.getenv('TOR_PASSWORD')
+DB_PATH = "agent_memory.db"
+VIDEO_DB_PATH = "video_logs.db"
+TOR_PASSWORD = os.getenv("TOR_PASSWORD")
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -77,30 +82,35 @@ shared_data = {
     "ai_provider": "openai",
     "system_status": "running",
     "monetization_eligible": True,
-    "total_revenue": 0
+    "total_revenue": 0,
 }
 
 comm_queue = queue.Queue()
 app = Flask(__name__)
+
 
 def get_ai_client():
     """Get AI client based on configured provider with fallback"""
     if shared_data["ai_provider"] == "azure" and AZURE_AI_AVAILABLE and GITHUB_TOKEN:
         try:
             return ChatCompletionsClient(
-                endpoint=AZURE_ENDPOINT,
-                credential=AzureKeyCredential(GITHUB_TOKEN)
+                endpoint=AZURE_ENDPOINT, credential=AzureKeyCredential(GITHUB_TOKEN)
             )
         except Exception as e:
             print(f"⚠️ Azure AI client failed, falling back to OpenAI: {e}")
             shared_data["ai_provider"] = "openai"
-    
+
     return openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 
 def generate_ai_content(prompt, system_message="You are a helpful assistant."):
     """Generate content using configured AI provider"""
     try:
-        if shared_data["ai_provider"] == "azure" and AZURE_AI_AVAILABLE and GITHUB_TOKEN:
+        if (
+            shared_data["ai_provider"] == "azure"
+            and AZURE_AI_AVAILABLE
+            and GITHUB_TOKEN
+        ):
             client = get_ai_client()
             response = client.complete(
                 messages=[
@@ -109,7 +119,7 @@ def generate_ai_content(prompt, system_message="You are a helpful assistant."):
                 ],
                 temperature=1.0,
                 top_p=1.0,
-                model=AZURE_MODEL
+                model=AZURE_MODEL,
             )
             return response.choices[0].message.content
         else:
@@ -118,20 +128,22 @@ def generate_ai_content(prompt, system_message="You are a helpful assistant."):
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": system_message},
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": prompt},
                 ],
-                temperature=1.0
+                temperature=1.0,
             )
             return response.choices[0].message.content
     except Exception as e:
         print(f"❌ AI generation failed: {e}")
         return None
 
+
 def init_memory():
     """Initialize agent memory database"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('''
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS actions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp TEXT,
@@ -139,15 +151,18 @@ def init_memory():
             action TEXT,
             reward REAL
         )
-    ''')
+    """
+    )
     conn.commit()
     conn.close()
+
 
 def init_video_db():
     """Initialize video logs database"""
     conn = sqlite3.connect(VIDEO_DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('''
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS video_uploads (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp TEXT,
@@ -156,43 +171,44 @@ def init_video_db():
             video_id TEXT,
             status TEXT
         )
-    ''')
+    """
+    )
     conn.commit()
     conn.close()
+
 
 def log_action(agent, action, reward=0):
     """Log agent action to database"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute(
-        'INSERT INTO actions (timestamp, agent, action, reward) VALUES (?, ?, ?, ?)',
-        (timestamp, agent, action, reward)
+        "INSERT INTO actions (timestamp, agent, action, reward) VALUES (?, ?, ?, ?)",
+        (timestamp, agent, action, reward),
     )
     conn.commit()
     conn.close()
-    
-    shared_data["log"].append({
-        "timestamp": timestamp,
-        "agent": agent,
-        "action": action,
-        "reward": reward
-    })
-    
+
+    shared_data["log"].append(
+        {"timestamp": timestamp, "agent": agent, "action": action, "reward": reward}
+    )
+
     if len(shared_data["log"]) > 100:
         shared_data["log"] = shared_data["log"][-100:]
+
 
 def log_video_upload(title, description, video_id, status):
     """Log video upload to database"""
     conn = sqlite3.connect(VIDEO_DB_PATH)
     cursor = conn.cursor()
-    timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute(
-        'INSERT INTO video_uploads (timestamp, title, description, video_id, status) VALUES (?, ?, ?, ?, ?)',
-        (timestamp, title, description, video_id, status)
+        "INSERT INTO video_uploads (timestamp, title, description, video_id, status) VALUES (?, ?, ?, ?, ?)",
+        (timestamp, title, description, video_id, status),
     )
     conn.commit()
     conn.close()
+
 
 def rotate_proxy():
     """Rotate Tor proxy"""
@@ -206,111 +222,123 @@ def rotate_proxy():
         print(f"❌ Proxy rotation failed: {e}")
         return False
 
+
 def check_youtube_monetization():
     """Check YouTube monetization status"""
     try:
-        youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
-        request = youtube.channels().list(part='monetizationDetails', mine=True)
+        youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
+        request = youtube.channels().list(part="monetizationDetails", mine=True)
         response = request.execute()
-        
-        if response['items']:
-            monetization = response['items'][0].get('monetizationDetails', {})
+
+        if response["items"]:
+            monetization = response["items"][0].get("monetizationDetails", {})
             shared_data["monetization"] = monetization
-            shared_data["monetization_eligible"] = monetization.get('access', {}).get('allowed', False)
+            shared_data["monetization_eligible"] = monetization.get("access", {}).get(
+                "allowed", False
+            )
             return shared_data["monetization_eligible"]
     except Exception as e:
         print(f"❌ YouTube monetization check failed: {e}")
         shared_data["monetization_eligible"] = False
-    
+
     return False
+
 
 def get_youtube_service():
     """Get authenticated YouTube service using OAuth2"""
-    SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
-    
+    SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+
     creds = None
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-    
+    if os.path.exists("token.json"):
+        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
             import json
             import tempfile
-            
-            oauth_data = load_secret('GoogleOAuth2')
+
+            oauth_data = load_secret("GoogleOAuth2")
             if not oauth_data:
-                raise ValueError("GoogleOAuth2 credentials not found in environment or secrets")
-            
+                raise ValueError(
+                    "GoogleOAuth2 credentials not found in environment or secrets"
+                )
+
             try:
                 client_config = json.loads(oauth_data)
             except json.JSONDecodeError:
-                raise ValueError("GoogleOAuth2 environment variable must contain valid JSON credentials")
-            
-            if 'web' in client_config:
-                web_creds = client_config['web']
+                raise ValueError(
+                    "GoogleOAuth2 environment variable must contain valid JSON credentials"
+                )
+
+            if "web" in client_config:
+                web_creds = client_config["web"]
                 client_config = {
-                    'installed': {
-                        'client_id': web_creds['client_id'],
-                        'client_secret': web_creds['client_secret'],
-                        'auth_uri': web_creds['auth_uri'],
-                        'token_uri': web_creds['token_uri'],
-                        'auth_provider_x509_cert_url': web_creds.get('auth_provider_x509_cert_url'),
-                        'redirect_uris': ['http://localhost']
+                    "installed": {
+                        "client_id": web_creds["client_id"],
+                        "client_secret": web_creds["client_secret"],
+                        "auth_uri": web_creds["auth_uri"],
+                        "token_uri": web_creds["token_uri"],
+                        "auth_provider_x509_cert_url": web_creds.get(
+                            "auth_provider_x509_cert_url"
+                        ),
+                        "redirect_uris": ["http://localhost"],
                     }
                 }
-            
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".json", delete=False
+            ) as temp_file:
                 json.dump(client_config, temp_file)
                 temp_secrets_path = temp_file.name
-            
+
             try:
-                flow = InstalledAppFlow.from_client_secrets_file(temp_secrets_path, SCOPES)
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    temp_secrets_path, SCOPES
+                )
                 creds = flow.run_local_server(port=8080)
             finally:
                 os.unlink(temp_secrets_path)
-        
-        with open('token.json', 'w') as token:
+
+        with open("token.json", "w") as token:
             token.write(creds.to_json())
-    
-    return build('youtube', 'v3', credentials=creds)
+
+    return build("youtube", "v3", credentials=creds)
+
 
 def upload_to_youtube(video_file, title, description):
     """Upload video to YouTube using OAuth2 authentication"""
     try:
         youtube = get_youtube_service()
-        
+
         body = {
-            'snippet': {
-                'title': title,
-                'description': description,
-                'tags': ['AI', 'automation', 'content'],
-                'categoryId': '22'
+            "snippet": {
+                "title": title,
+                "description": description,
+                "tags": ["AI", "automation", "content"],
+                "categoryId": "22",
             },
-            'status': {
-                'privacyStatus': 'public'
-            }
+            "status": {"privacyStatus": "public"},
         }
-        
+
         media = MediaFileUpload(video_file, chunksize=-1, resumable=True)
         request = youtube.videos().insert(
-            part=','.join(body.keys()),
-            body=body,
-            media_body=media
+            part=",".join(body.keys()), body=body, media_body=media
         )
-        
+
         response = request.execute()
-        video_id = response['id']
-        
-        log_video_upload(title, description, video_id, 'success')
+        video_id = response["id"]
+
+        log_video_upload(title, description, video_id, "success")
         log_action("video_uploader", f"Uploaded video: {title}", 100)
-        
+
         return video_id
     except Exception as e:
         print(f"❌ YouTube upload failed: {e}")
-        log_video_upload(title, description, None, f'failed: {e}')
+        log_video_upload(title, description, None, f"failed: {e}")
         return None
+
 
 def generate_video_script(topic):
     """Generate video script using AI"""
@@ -323,59 +351,60 @@ def generate_video_script(topic):
     - Natural speaking tone
     
     Format as scenes with timestamps."""
-    
+
     return generate_ai_content(prompt, "You are a professional YouTube scriptwriter.")
-
-
 
 
 def run_video_creator():
     """Main video creation function using consolidated video creator"""
     if not shared_data["video_generation_active"] or shared_data["paused"]:
         return
-    
+
     try:
         print("🎬 Starting video creation...")
-        
-        topic = generate_ai_content("Generate a trending topic for a YouTube video", 
-                                   "You are a trend analyst. Suggest one specific, engaging topic.")
-        
+
+        topic = generate_ai_content(
+            "Generate a trending topic for a YouTube video",
+            "You are a trend analyst. Suggest one specific, engaging topic.",
+        )
+
         if not topic:
             print("❌ Failed to generate topic")
             return
-        
+
         print(f"📝 Topic: {topic}")
-        
+
         script = generate_video_script(topic)
         if not script:
             print("❌ Failed to generate script")
             return
-        
+
         from agents.video_creator import execute_video_creation
+
         video_file = f"video_{int(time.time())}.mp4"
-        
         result = execute_video_creation(script)
         if result and "Error" not in str(result):
             print(f"🎥 Video created: {result}")
-            
+
             title = f"AI Generated: {topic[:50]}..."
             description = f"Auto-generated content about {topic}\n\n{script[:500]}..."
-            
+
             video_id = upload_to_youtube(result, title, description)
-            
+
             if video_id:
                 print(f"✅ Video uploaded: https://youtube.com/watch?v={video_id}")
                 shared_data["revenue"] += 10
                 shared_data["total_revenue"] += 10
-            
+
             if os.path.exists(result):
                 os.remove(result)
         else:
             print(f"❌ Video creation failed: {result}")
-        
+
     except Exception as e:
         print(f"❌ Video creation failed: {e}")
         log_action("video_creator", f"Video creation failed: {e}", -10)
+
 
 def content_loop():
     """Content generation loop"""
@@ -383,22 +412,23 @@ def content_loop():
         if shared_data["paused"] or not shared_data["content_pipeline_active"]:
             time.sleep(60)
             continue
-        
+
         try:
             print("🔍 Content agent discovering trends...")
             log_action("content_agent", "Discovering trends", 5)
-            
+
             print("✍️ Content agent generating content...")
             log_action("content_agent", "Generating content", 10)
-            
+
             shared_data["revenue"] += 25
             shared_data["total_revenue"] += 25
-            
+
         except Exception as e:
             print(f"❌ Content loop error: {e}")
             log_action("content_agent", f"Error: {e}", -5)
-        
+
         time.sleep(3600)
+
 
 def infrastructure_loop():
     """Infrastructure management loop"""
@@ -406,45 +436,45 @@ def infrastructure_loop():
         if shared_data["paused"]:
             time.sleep(60)
             continue
-        
+
         try:
             print("🏗️ Infrastructure agent monitoring...")
             log_action("infrastructure_agent", "Monitoring infrastructure", 5)
-            
+
             shared_data["infrastructure_agents_active"] += 1
-            
+
             discover_and_validate()
             deploy_infrastructure()
-            
+
             shared_data["infrastructure_agents_active"] -= 1
-            
+
         except Exception as e:
             print(f"❌ Infrastructure loop error: {e}")
             log_action("infrastructure_agent", f"Error: {e}", -5)
             shared_data["infrastructure_agents_active"] -= 1
-        
+
         time.sleep(3600)
 
-@app.route('/status')
+
+@app.route("/status")
 def status():
     """Get system status"""
     return jsonify(shared_data)
 
-@app.route('/metrics')
+
+@app.route("/metrics")
 def metrics():
     """Get detailed metrics"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM actions ORDER BY timestamp DESC LIMIT 50')
+    cursor.execute("SELECT * FROM actions ORDER BY timestamp DESC LIMIT 50")
     recent_actions = cursor.fetchall()
     conn.close()
-    
-    return jsonify({
-        "shared_data": shared_data,
-        "recent_actions": recent_actions
-    })
 
-@app.route('/toggle', methods=['POST'])
+    return jsonify({"shared_data": shared_data, "recent_actions": recent_actions})
+
+
+@app.route("/toggle", methods=["POST"])
 def toggle():
     """Toggle system pause state"""
     shared_data["paused"] = not shared_data["paused"]
@@ -452,7 +482,8 @@ def toggle():
     log_action("system", f"System {status}", 0)
     return jsonify({"status": status, "paused": shared_data["paused"]})
 
-@app.route('/toggle_content', methods=['POST'])
+
+@app.route("/toggle_content", methods=["POST"])
 def toggle_content():
     """Toggle content pipeline"""
     shared_data["content_pipeline_active"] = not shared_data["content_pipeline_active"]
@@ -460,7 +491,8 @@ def toggle_content():
     log_action("system", f"Content pipeline {status}", 0)
     return jsonify({"content_pipeline_active": shared_data["content_pipeline_active"]})
 
-@app.route('/toggle_video', methods=['POST'])
+
+@app.route("/toggle_video", methods=["POST"])
 def toggle_video():
     """Toggle video generation"""
     shared_data["video_generation_active"] = not shared_data["video_generation_active"]
@@ -468,21 +500,24 @@ def toggle_video():
     log_action("system", f"Video generation {status}", 0)
     return jsonify({"video_generation_active": shared_data["video_generation_active"]})
 
-@app.route('/trigger_video', methods=['POST'])
+
+@app.route("/trigger_video", methods=["POST"])
 def trigger_video():
     """Manually trigger video creation"""
     threading.Thread(target=run_video_creator, daemon=True).start()
     return jsonify({"message": "Video creation triggered"})
 
-@app.route('/switch_ai', methods=['POST'])
+
+@app.route("/switch_ai", methods=["POST"])
 def switch_ai():
     """Switch AI provider"""
-    provider = request.json.get('provider', 'openai')
-    if provider in ['openai', 'azure']:
+    provider = request.json.get("provider", "openai")
+    if provider in ["openai", "azure"]:
         shared_data["ai_provider"] = provider
         log_action("system", f"Switched to {provider} AI", 0)
         return jsonify({"ai_provider": shared_data["ai_provider"]})
     return jsonify({"error": "Invalid provider"}), 400
+
 
 def load_secret(name):
     """Load secret from environment or secrets directory"""
@@ -494,9 +529,10 @@ def load_secret(name):
     secrets_dir = "/run/secrets"
     path = os.path.join(secrets_dir, name)
     if os.path.isfile(path):
-        with open(path, 'r') as f:
+        with open(path, "r") as f:
             return f.read().strip()
     return None
+
 
 def monitor_rss(feed_url):
     """Monitor RSS feed"""
@@ -508,14 +544,15 @@ def monitor_rss(feed_url):
     except Exception as e:
         print(f"❌ RSS monitoring failed: {e}")
 
+
 def monitor_reddit(subreddit_name="entrepreneur"):
     """Monitor Reddit subreddit"""
     print(f"👀 Monitoring Reddit: r/{subreddit_name}")
     try:
         reddit = praw.Reddit(
-            client_id=load_secret('reddit_client_id') or '',
-            client_secret=load_secret('reddit_client_secret') or '',
-            user_agent=load_secret('reddit_user_agent') or 'auto-agent/1.0'
+            client_id=load_secret("reddit_client_id") or "",
+            client_secret=load_secret("reddit_client_secret") or "",
+            user_agent=load_secret("reddit_user_agent") or "auto-agent/1.0",
         )
         subreddit = reddit.subreddit(subreddit_name)
         for post in subreddit.new(limit=3):
@@ -523,11 +560,13 @@ def monitor_reddit(subreddit_name="entrepreneur"):
     except Exception as e:
         print(f"❌ Reddit monitoring failed: {e}")
 
+
 def discover_and_validate():
     """Discovery and validation phase"""
     rotate_proxy()
     monitor_rss("https://hnrss.org/frontpage")
     monitor_reddit("smallbusiness")
+
 
 def deploy_infrastructure():
     """Deploy infrastructure via Terraform"""
@@ -541,8 +580,9 @@ def deploy_infrastructure():
         print("✅ Infrastructure deployed successfully")
     except Exception as e:
         print(f"❌ Infrastructure deployment failed: {e}")
-        if 'original_dir' in locals():
+        if "original_dir" in locals():
             os.chdir(original_dir)
+
 
 def create_stub_agents():
     """Create stub agent files"""
@@ -550,7 +590,7 @@ def create_stub_agents():
     os.makedirs(agents_dir, exist_ok=True)
     for name in [
         "trend_scanner.py",
-        "script_writer.py", 
+        "script_writer.py",
         "thumbnail_designer.py",
         "video_creator.py",
         "uploader.py",
@@ -566,6 +606,7 @@ def create_stub_agents():
             with open(path, "w") as f:
                 f.write(f'print("🚀 Agent active: {name}")')
 
+
 def run_pipeline():
     """Run CrewAI pipeline"""
     trend_scanner = Agent(
@@ -573,7 +614,7 @@ def run_pipeline():
     )
     script_writer = Agent(
         role="ScriptWriter",
-        goal="Write viral scripts", 
+        goal="Write viral scripts",
         backstory="Writes short-form scripts",
     )
     thumbnail_designer = Agent(
@@ -609,7 +650,7 @@ def run_pipeline():
         ),
         Task(
             agent=thumbnail_designer,
-            description="Design a thumbnail", 
+            description="Design a thumbnail",
             expected_output="Thumbnail image file",
         ),
         Task(
@@ -652,8 +693,10 @@ def run_pipeline():
     except Exception as e:
         print("❌ ERROR during CrewAI execution:")
         import traceback
+
         traceback.print_exc()
         log_action("crew", f"Pipeline error: {str(e)}", -10)
+
 
 def run_pipeline_loop(interval_minutes=30):
     """Run CrewAI pipeline in a loop"""
@@ -666,56 +709,61 @@ def run_pipeline_loop(interval_minutes=30):
                 log_action("crew", f"Pipeline error: {str(e)}", -10)
         time.sleep(interval_minutes * 60)
 
+
 def main(mode="unified"):
     """Main entry point for unified autonomous agent system"""
     print("🚀 Starting Unified Autonomous Agent System...")
     print("=" * 60)
     print("🤖 Initializing AI providers...")
-    
+
     if AZURE_AI_AVAILABLE and GITHUB_TOKEN:
         print("✅ Azure AI available with GitHub token")
     else:
         print("⚠️ Azure AI not available, using OpenAI only")
-    
+
     print("📊 Initializing databases...")
     init_memory()
     init_video_db()
-    
+
     print("💰 Checking YouTube monetization...")
     check_youtube_monetization()
-    
+
     print("🌐 Starting Flask server on port 8000...")
-    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8000, debug=False), daemon=True).start()
+    threading.Thread(
+        target=lambda: app.run(host="0.0.0.0", port=8000, debug=False), daemon=True
+    ).start()
     print("📊 Server: http://localhost:8000/status")
-    
+
     if mode in ["unified", "crewai"]:
         print("🎭 Creating stub agents...")
         create_stub_agents()
-    
+
     print("🎬 Starting video generation scheduler...")
     scheduler = BackgroundScheduler()
-    scheduler.add_job(run_video_creator, 'interval', minutes=15)
+    scheduler.add_job(run_video_creator, "interval", minutes=15)
     scheduler.start()
-    
+
     processes = []
-    
+
     if mode in ["unified", "basic"]:
         print("📝 Starting content pipeline...")
         content_proc = multiprocessing.Process(target=content_loop)
         content_proc.start()
         processes.append(content_proc)
-        
+
         print("🏗️ Starting infrastructure agents...")
         for i in range(2):
             p = multiprocessing.Process(target=infrastructure_loop)
             p.start()
             processes.append(p)
-    
+
     if mode in ["unified", "crewai"]:
         print("🎭 Starting CrewAI pipeline...")
-        crewai_thread = threading.Thread(target=lambda: run_pipeline_loop(30), daemon=True)
+        crewai_thread = threading.Thread(
+            target=lambda: run_pipeline_loop(30), daemon=True
+        )
         crewai_thread.start()
-    
+
     print("=" * 60)
     print("✅ Unified Autonomous Agent System is running!")
     print("📊 Monitor at: http://localhost:8000/status")
@@ -725,7 +773,7 @@ def main(mode="unified"):
     if mode in ["unified", "crewai"]:
         print("🎭 CrewAI pipeline: Every 30 minutes")
     print("=" * 60)
-    
+
     try:
         for p in processes:
             p.join()
@@ -735,6 +783,7 @@ def main(mode="unified"):
         for p in processes:
             p.terminate()
         print("✅ Shutdown complete")
+
 
 if __name__ == "__main__":
     main()

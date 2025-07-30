@@ -11,14 +11,19 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent.parent))
 from utils.platform_utils import (
-    get_ffmpeg_command, normalize_path, run_command, 
-    ensure_directory, get_repo_dir
+    get_ffmpeg_command,
+    normalize_path,
+    run_command,
+    ensure_directory,
+    get_repo_dir,
 )
+
 
 def safe_import_elevenlabs():
     """Safely import ElevenLabs with proper error handling for threading context"""
     try:
         from elevenlabs.client import ElevenLabs
+
         return True, ElevenLabs
     except ImportError as e:
         print(f"⚠️ ElevenLabs import failed: {e}")
@@ -26,6 +31,7 @@ def safe_import_elevenlabs():
     except Exception as e:
         print(f"⚠️ ElevenLabs import error: {e}")
         return False, None
+
 
 ELEVENLABS_AVAILABLE, ElevenLabs = safe_import_elevenlabs()
 
@@ -37,9 +43,10 @@ def log_action(agent, action, reward=0):
     repo_dir = get_repo_dir()
     if repo_dir not in sys.path:
         sys.path.append(repo_dir)
-    
+
     try:
         from SelfHealingLauncher import log_action as main_log_action
+
         main_log_action(agent, action, reward)
     except ImportError as e:
         print(f"⚠️ Could not import logging function: {e}")
@@ -51,7 +58,9 @@ class VideoCreatorAgent:
         self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.eleven_key = os.getenv("ELEVENLABS_API_KEY")
         self.elevenlabs_client = (
-            ElevenLabs(api_key=self.eleven_key) if ELEVENLABS_AVAILABLE and ElevenLabs and self.eleven_key else None
+            ElevenLabs(api_key=self.eleven_key)
+            if ELEVENLABS_AVAILABLE and ElevenLabs and self.eleven_key
+            else None
         )
         self.stability_key = os.getenv("MODELSLAB_API_KEY")
         self.output_dir = normalize_path("output")
@@ -216,9 +225,11 @@ SCRIPT:
         except RuntimeError as e:
             print(f"❌ {e}")
             raise
-            
+
         for i, (img, audio) in enumerate(inputs):
-            output_path = normalize_path(os.path.join(self.output_dir, f"segment_{i:02d}.mp4"))
+            output_path = normalize_path(
+                os.path.join(self.output_dir, f"segment_{i:02d}.mp4")
+            )
             cmd = [
                 ffmpeg_cmd,
                 "-y",
@@ -247,7 +258,7 @@ SCRIPT:
         segments_file = normalize_path(os.path.join(self.output_dir, "segments.txt"))
         with open(segments_file, "w") as f:
             for seg in segment_paths:
-                abs_path = os.path.abspath(seg).replace('\\', '/')
+                abs_path = os.path.abspath(seg).replace("\\", "/")
                 f.write(f"file '{abs_path}'\n")
 
         final_video = normalize_path(os.path.join(self.output_dir, "final_video.mp4"))
@@ -256,7 +267,7 @@ SCRIPT:
         except RuntimeError as e:
             print(f"❌ {e}")
             raise
-            
+
         cmd = [
             ffmpeg_cmd,
             "-y",
@@ -280,15 +291,18 @@ def execute_video_creation(script_text):
     video_creator_agent = VideoCreatorAgent()
     return video_creator_agent.execute_task(script_text)
 
+
 def generate_voiceover(text, output_file):
     """Standalone voiceover generation function for compatibility"""
     creator = VideoCreatorAgent()
     return creator.generate_voiceover(text, output_file)
 
+
 def break_script_into_scenes(script):
     """Break script into scenes for compatibility"""
     creator = VideoCreatorAgent()
     return creator.break_script_into_scenes(script)
+
 
 def create_video_from_scenes(scenes, output_file):
     """Create video from scenes for compatibility"""
