@@ -573,6 +573,8 @@ def switch_ai():
 
 def load_secret(name):
     """Load secret from environment or secrets directory"""
+    if name in os.environ:
+        return os.getenv(name)
     env_key = name.upper()
     if env_key in os.environ:
         return os.getenv(env_key)
