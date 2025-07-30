@@ -326,99 +326,11 @@ def generate_video_script(topic):
     
     return generate_ai_content(prompt, "You are a professional YouTube scriptwriter.")
 
-def break_script_into_scenes(script):
-    """Break script into individual scenes"""
-    scenes = []
-    lines = script.split('\n')
-    current_scene = ""
-    
-    for line in lines:
-        if line.strip():
-            if any(keyword in line.lower() for keyword in ['scene', 'timestamp', '0:', '1:', '2:']):
-                if current_scene:
-                    scenes.append(current_scene.strip())
-                current_scene = line
-            else:
-                current_scene += " " + line
-    
-    if current_scene:
-        scenes.append(current_scene.strip())
-    
-    return scenes[:5]
 
-def generate_voiceover(text, output_file):
-    """Generate voiceover using ElevenLabs"""
-    try:
-        if not ELEVENLABS_API_KEY:
-            print("❌ ElevenLabs API key not found")
-            return False
-            
-        if not ELEVENLABS_AVAILABLE or ElevenLabs is None:
-            print("❌ ElevenLabs module not available")
-            return False
-            
-        client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
-        audio_generator = client.text_to_speech.convert(
-            text=text,
-            voice_id="JBFqnCBsd6RMkjVDRZzb",
-            model_id="eleven_multilingual_v2"
-        )
-        
-        with open(output_file, 'wb') as f:
-            for chunk in audio_generator:
-                if isinstance(chunk, bytes):
-                    f.write(chunk)
-        
-        return True
-    except Exception as e:
-        print(f"❌ Voiceover generation failed: {e}")
-        return False
 
-def create_video_from_scenes(scenes, output_file):
-    """Create video from scenes using FFmpeg"""
-    try:
-        audio_files = []
-        
-        for i, scene in enumerate(scenes):
-            audio_file = f"temp_audio_{i}.mp3"
-            if generate_voiceover(scene, audio_file):
-                audio_files.append(audio_file)
-        
-        if not audio_files:
-            return False
-        
-        concat_list = "concat_list.txt"
-        with open(concat_list, 'w') as f:
-            for audio_file in audio_files:
-                f.write(f"file '{audio_file}'\n")
-        
-        try:
-            from utils.platform_utils import get_ffmpeg_command
-            ffmpeg_cmd = get_ffmpeg_command()
-        except (ImportError, RuntimeError) as e:
-            print(f"❌ FFmpeg not available: {e}")
-            return False
-            
-        cmd = [
-            ffmpeg_cmd, '-f', 'concat', '-safe', '0', '-i', concat_list,
-            '-c', 'copy', output_file, '-y'
-        ]
-        
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        
-        for audio_file in audio_files:
-            if os.path.exists(audio_file):
-                os.remove(audio_file)
-        if os.path.exists(concat_list):
-            os.remove(concat_list)
-        
-        return result.returncode == 0
-    except Exception as e:
-        print(f"❌ Video creation failed: {e}")
-        return False
 
 def run_video_creator():
-    """Main video creation function"""
+    """Main video creation function using consolidated video creator"""
     if not shared_data["video_generation_active"] or shared_data["paused"]:
         return
     
@@ -439,26 +351,27 @@ def run_video_creator():
             print("❌ Failed to generate script")
             return
         
-        scenes = break_script_into_scenes(script)
-        print(f"🎭 Created {len(scenes)} scenes")
+        from agents.video_creator import execute_video_creation
+        video_file = f"video_{int(time.time())}.mp4"
         
-        video_file = f"video_{int(time.time())}.mp3"
-        
-        if create_video_from_scenes(scenes, video_file):
-            print(f"🎥 Video created: {video_file}")
+        result = execute_video_creation(script)
+        if result and "Error" not in str(result):
+            print(f"🎥 Video created: {result}")
             
             title = f"AI Generated: {topic[:50]}..."
             description = f"Auto-generated content about {topic}\n\n{script[:500]}..."
             
-            video_id = upload_to_youtube(video_file, title, description)
+            video_id = upload_to_youtube(result, title, description)
             
             if video_id:
                 print(f"✅ Video uploaded: https://youtube.com/watch?v={video_id}")
                 shared_data["revenue"] += 10
                 shared_data["total_revenue"] += 10
             
-            if os.path.exists(video_file):
-                os.remove(video_file)
+            if os.path.exists(result):
+                os.remove(result)
+        else:
+            print(f"❌ Video creation failed: {result}")
         
     except Exception as e:
         print(f"❌ Video creation failed: {e}")
